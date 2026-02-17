@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Stripe Test Payment</title>
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+  <h3>Stripe Test Payment</h3>
+  <div id="card-element"></div>
+  <button id="pay">Pay</button>
+
+  <script>
+    const stripe = Stripe("pk_test_51OOXzHCwX9AIVtdmQHKvpPXUwceUubIeKPG2TW2gYXit4CJRGgW4PQGAxxoavTofJMAfKlPhzeUqgOCyVj71boZ600hQTXzGUf");
+    const elements = stripe.elements();
+    const card = elements.create("card");
+    card.mount("#card-element");
+
+    const clientSecret = "pi_3SuqPsCwX9AIVtdm1zAPcB5F_secret_ACUNTqTsdJPaHMKSthIv3G0Nq";
+
+    document.getElementById("pay").onclick = async () => {
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: card,
+          billing_details: { name: "Test User" },
+        },
+      });
+
+      if (result.error) {
+        alert(result.error.message);
+      } else {
+        alert("Payment Success");
+      }
+    };
+  </script>
+</body>
+</html>
