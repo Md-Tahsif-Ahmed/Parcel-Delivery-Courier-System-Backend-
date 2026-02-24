@@ -7,6 +7,8 @@ import { AuthValidation } from "./auth.validation";
 const router = express.Router();
 
 
+
+
 router.post("/google", AuthController.googleLogin);
 
 router.post(
@@ -47,14 +49,18 @@ router.post(
   "/verify-phone",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { phone, oneTimeCode } = req.body;
+      const { phone, code, countryCode } = req.body;
 
-      req.body = { phone, oneTimeCode: Number(oneTimeCode) };
+      if (!code) {
+        return res.status(400).json({ message: "OTP code is required" });
+      }
+
+      req.body = { phone, code: Number(code), countryCode }; 
       next();
     } catch (error) {
       return res
         .status(500)
-        .json({ message: "Failed to convert string to number" });
+        .json({ message: "Failed to convert OTP to number" });
     }
   },
   validateRequest(AuthValidation.createVerifyPhoneZodSchema),
@@ -63,9 +69,11 @@ router.post(
 
 router.post(
   "/reset-password",
+  auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER),
   validateRequest(AuthValidation.createResetPasswordZodSchema),
   AuthController.resetPassword,
 );
+
 
 router.post(
   "/change-password",

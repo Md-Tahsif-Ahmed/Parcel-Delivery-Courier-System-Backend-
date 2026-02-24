@@ -1,7 +1,16 @@
+import { IUser } from "../app/modules/user/user.interface";
+
 export type IVerifyEmail = {
   email: string;
   oneTimeCode: number;
 };
+
+export type IVerifyEmailResponse = {
+  message: string;
+  token?: string;
+  user?: IUser;
+  resetToken?: string;
+}
 
 export type ILoginData = {
   email?: string;

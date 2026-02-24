@@ -36,25 +36,6 @@ const fileUploadHandler = () => {
         case "thumbnail":
           uploadDir = path.join(baseUploadDir, "thumbnail");
           break;
-        // ---------------- Driver registration ----------------
-        case "vehicleImage":
-          uploadDir = path.join(baseUploadDir, "vehicleImage");
-          break;
-        case "vehicleRegistrationDoc":
-          uploadDir = path.join(baseUploadDir, "vehicleRegistrationDoc");
-          break;
-        case "stateIdDoc":
-          uploadDir = path.join(baseUploadDir, "stateIdDoc");
-          break;
-        case "driversLicenseDoc":
-          uploadDir = path.join(baseUploadDir, "driversLicenseDoc");
-          break;
-        case "ssnDoc":
-          uploadDir = path.join(baseUploadDir, "ssnDoc");
-          break;
-        case "insuranceDoc":
-          uploadDir = path.join(baseUploadDir, "insuranceDoc");
-          break;
         case "logo":
           uploadDir = path.join(baseUploadDir, "logo");
           break;
@@ -92,7 +73,6 @@ const fileUploadHandler = () => {
       file.fieldname === "profileImage" ||
       file.fieldname === "seatingView" ||
       file.fieldname === "thumbnail" || // Added the 'thumbnail' field here
-      file.fieldname === "vehicleImage" ||
       file.fieldname === "logo" ||
       file.fieldname === "banner" ||
       file.fieldname === "cover"
@@ -118,31 +98,6 @@ const fileUploadHandler = () => {
           new ApiError(
             StatusCodes.BAD_REQUEST,
             "Only .jpeg, .png, .jpg .svg .webp .octet-stream .svg+xml file supported",
-          ),
-        );
-      }
-    } else if (
-      // Driver docs (PDF only, but image also allow)
-      file.fieldname === "vehicleRegistrationDoc" ||
-      file.fieldname === "stateIdDoc" ||
-      file.fieldname === "driversLicenseDoc" ||
-      file.fieldname === "ssnDoc" ||
-      file.fieldname === "insuranceDoc"
-    ) {
-      if (
-        file.mimetype === "application/pdf" ||
-        file.mimetype === "image/png" ||
-        file.mimetype === "image/jpg" ||
-        file.mimetype === "image/jpeg" ||
-        file.mimetype === "image/webp" ||
-        file.mimetype === "application/octet-stream"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only PDF or image files are supported for driver documents",
           ),
         );
       }
@@ -235,13 +190,6 @@ const fileUploadHandler = () => {
     { name: "seatingView", maxCount: 10 },
     { name: "nidFrontPic", maxCount: 1 },
     { name: "thumbnail", maxCount: 5 }, // Added this line for thumbnail
-    // ---------------- Driver registration ----------------
-    { name: "vehicleImage", maxCount: 5 },
-    { name: "vehicleRegistrationDoc", maxCount: 1 },
-    { name: "stateIdDoc", maxCount: 1 },
-    { name: "driversLicenseDoc", maxCount: 1 },
-    { name: "ssnDoc", maxCount: 1 },
-    { name: "insuranceDoc", maxCount: 1 },
     { name: "logo", maxCount: 5 },
     { name: "banner", maxCount: 5 },
     { name: "cover", maxCount: 1 },

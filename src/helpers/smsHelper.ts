@@ -99,7 +99,7 @@ class TwilioService {
       console.log("Original phone:", phoneNumber);
       console.log("Country code:", countryCode);
       console.log("Formatted phone:", formattedPhone);
-      const serviceSid = config.twilio.serviceSid;
+      const serviceSid = "VA7c605b790f2007d17554707a24d7ad37";
       console.log("Service SID:", serviceSid);
       if (!serviceSid) {
         throw new ApiError(
@@ -109,7 +109,7 @@ class TwilioService {
       }
 
       const verification = await this.client.verify.v2
-        .services(serviceSid)
+        .services("VA7c605b790f2007d17554707a24d7ad37")
         .verifications.create({
           to: formattedPhone,
           channel: "sms",
@@ -147,7 +147,7 @@ class TwilioService {
       console.log("Code:", code);
 
       const verification = await this.client.verify.v2
-        .services(config.twilio.serviceSid!)
+        .services("VA7c605b790f2007d17554707a24d7ad37")
         .verificationChecks.create({
           to: formattedPhone,
           code: code,

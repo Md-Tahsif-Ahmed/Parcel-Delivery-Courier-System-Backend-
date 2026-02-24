@@ -30,23 +30,32 @@ const userSchema = new Schema<IUser, UserModal>(
       // required: true,
     },
 
-    email: {
-      type: String,
-      required: false,
-      unique: true,
-      lowercase: true,
-      sparse: true,
-    },
+    // email: {
+    //   type: String,
+    //   required: false,
+    //   unique: true,
+    //   lowercase: true,
+    //   sparse: true,
+    // },
     countryCode: {
       type: String,
       // required: true,
     },
+    // phone: {
+    //   type: String,
+    //   // required: true,
+    //   unique: true,
+    //   sparse: true,
+    // },
+    email: {
+      type: String,
+      lowercase: true,
+    },
+
     phone: {
       type: String,
-      // required: true,
-      unique: true,
-      sparse: true,
     },
+
     role: {
       type: String,
       enum: Object.values(USER_ROLES),
@@ -164,6 +173,30 @@ const userSchema = new Schema<IUser, UserModal>(
   },
 );
 
+// indexing
+
+
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      email: { $exists: true, $ne: null }
+    },
+  }
+);
+
+userSchema.index(
+  { phone: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $exists: true, $ne: null }
+    },
+  }
+);
+
+
 //exist user check
 userSchema.statics.isExistUserById = async (id: string) => {
   const isExist = await User.findById(id);
@@ -216,12 +249,11 @@ userSchema.pre("save", async function (next) {
   if (this.isModified("password") && this.password) {
     this.password = await bcrypt.hash(
       this.password,
-      Number(config.bcrypt_salt_rounds)
+      Number(config.bcrypt_salt_rounds),
     );
   }
 
   next();
 });
-
 
 export const User = model<IUser, UserModal>("User", userSchema);

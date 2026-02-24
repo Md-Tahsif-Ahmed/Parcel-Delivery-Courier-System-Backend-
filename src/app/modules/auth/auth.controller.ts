@@ -20,17 +20,32 @@ const googleLogin = catchAsync(async (req, res) => {
 });
 
 
-const verifyEmail = catchAsync(async (req: Request, res: Response) => {
-  const verifyData = req.body;
-  const result = await AuthService.verifyEmailToDB(verifyData);
+// const verifyEmail = catchAsync(async (req: Request, res: Response) => {
+//   const verifyData = req.body;
+//   const result = await AuthService.verifyEmailToDB(verifyData);
 
-  const { message, token, user } = result as any;
+//   const { message, token, user } = result as any;
+
+//   sendResponse(res, {
+//     success: true,
+//     statusCode: StatusCodes.OK,
+//     message,
+//     data: { token, user },
+//   });
+// });
+
+const verifyEmail = catchAsync(async (req: Request, res: Response) => {
+  const result = await AuthService.verifyEmailToDB(req.body);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message,
-    data: { token, user },
+    message: result.message,
+    data: {
+      token: result.token ?? null,
+      resetToken: result.resetToken ?? null,
+      user: result.user ?? null,
+    },
   });
 });
 

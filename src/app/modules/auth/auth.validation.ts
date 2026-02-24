@@ -10,7 +10,8 @@ const createVerifyEmailZodSchema = z.object({
 const createVerifyPhoneZodSchema = z.object({
   body: z.object({
     phone: z.string({ required_error: "Phone number is required" }),
-    oneTimeCode: z.number({ required_error: "One time code is required" }),
+    code: z.number({ required_error: "One time code is required" }),
+    countryCode: z.string({ required_error: "Country code is required" }),
   }),
 });
 

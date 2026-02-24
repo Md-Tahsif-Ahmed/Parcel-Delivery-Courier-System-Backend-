@@ -7,13 +7,6 @@ export type IFolderName =
   | "video"
   | "document"
   | "thumbnail"
-  // Driver registration
-  | "vehicleImage"
-  | "vehicleRegistrationDoc"
-  | "stateIdDoc"
-  | "driversLicenseDoc"
-  | "ssnDoc"
-  | "insuranceDoc"
   | "others";
 
 //single file
