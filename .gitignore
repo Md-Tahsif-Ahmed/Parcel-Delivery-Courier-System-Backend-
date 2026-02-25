@@ -3,3 +3,4 @@ uploads
 /winston
 # .env
 .env.local
+.env
