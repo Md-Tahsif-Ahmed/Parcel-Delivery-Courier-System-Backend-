@@ -26,14 +26,14 @@ export const getSingleFilePath = (files: any, folderName: IFolderName) => {
   return undefined;
 };
 
-//multiple files
-// export const getMultipleFilesPath = (files: any, folderName: IFolderName) => {
-//   const folderFiles = files && files[folderName];
-//   if (folderFiles) {
-//     if (Array.isArray(folderFiles)) {
-//       return folderFiles.map((file: any) => `/${folderName}/${file.filename}`);
-//     }
-//   }
+// multiple files
+export const getMultipleFilesPath = (files: any, folderName: IFolderName) => {
+  const folderFiles = files && files[folderName];
+  if (folderFiles) {
+    if (Array.isArray(folderFiles)) {
+      return folderFiles.map((file: any) => `/${folderName}/${file.filename}`);
+    }
+  }
 
-//   return undefined;
-// };
+  return undefined;
+};

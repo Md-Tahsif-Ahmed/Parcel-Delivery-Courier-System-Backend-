@@ -132,7 +132,7 @@ export const UserValidation = {
       year: z.coerce.number().int().optional(),
       licensePlateNumber: z.string().optional(),
       color: z.string().optional(),
-      vehicleImage: z.array(z.string()).optional(),
+      vehicleImage: z.string().optional(),
     }),
   }),
   driverRequiredDocsZodSchema: z.object({

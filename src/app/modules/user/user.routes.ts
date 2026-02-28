@@ -154,7 +154,7 @@ router.patch(
   "/driver/registration/vehicle-info",
   requireDriver,
   fileUploadHandler(),
-  parseAllFilesData(FOLDER_NAMES.VEHICLE_IMAGE),
+  parseAllFilesData({ fieldName: FOLDER_NAMES.VEHICLE_IMAGE, forceSingle: true }),
   validateRequest(UserValidation.driverVehicleInfoZodSchema),
   UserController.updateDriverVehicleInfo,
 );

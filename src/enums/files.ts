@@ -13,3 +13,4 @@ export enum FOLDER_NAMES {
   OTHERS = "others",
   REMOVE_IMAGE = "removeImage",
 }
+ 

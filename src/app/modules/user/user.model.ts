@@ -1,16 +1,94 @@
 import { model, Schema } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
 import {
+  DRIVER_APPLICATION_STATUS,
   IUser,
   MEMBERSHIP_TYPE,
   SUBSCRIPTION_STATUS,
   UserModal,
+  VEHICLE_TYPE,
 } from "./user.interface";
 import bcrypt from "bcrypt";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import config from "../../../config";
 
+// ====================Driver Code====================
+
+const DriverAddressSchema = new Schema(
+  {
+    street: { type: String, default: null },
+    city: { type: String, default: null },
+    state: { type: String, default: null },
+    zip: { type: String, default: null },
+    country: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const DriverBasicInfoSchema = new Schema(
+  {
+    dateOfBirth: { type: Date, default: null },
+    address: { type: DriverAddressSchema, default: {} },
+    ssn: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const DriverVehicleInfoSchema = new Schema(
+  {
+    vehicleType: {
+      type: String,
+      enum: Object.values(VEHICLE_TYPE),
+      default: null,
+    },
+    make: { type: String, default: null },
+    year: { type: Number, default: null },
+    licensePlateNumber: { type: String, default: null },
+    color: { type: String, default: null },
+    vehicleImage: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
+const DriverRequiredDocsSchema = new Schema(
+  {
+    vehicleRegistrationDoc: { type: String, default: null },
+    stateIdDoc: { type: String, default: null },
+    driversLicenseDoc: { type: String, default: null },
+    ssnDoc: { type: String, default: null },
+    insuranceDoc: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const DriverStepsSchema = new Schema(
+  {
+    basicInfoCompleted: { type: Boolean, default: false },
+    vehicleInfoCompleted: { type: Boolean, default: false },
+    requiredDocsCompleted: { type: Boolean, default: false },
+    referralCompleted: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
+const DriverRegistrationSchema = new Schema(
+  {
+    basicInfo: { type: DriverBasicInfoSchema, default: {} },
+    vehicleInfo: { type: DriverVehicleInfoSchema, default: {} },
+    requiredDocs: { type: DriverRequiredDocsSchema, default: {} },
+    referralCode: { type: String, default: null },
+    steps: { type: DriverStepsSchema, default: {} },
+    applicationStatus: {
+      type: String,
+      enum: Object.values(DRIVER_APPLICATION_STATUS),
+      default: DRIVER_APPLICATION_STATUS.NONE,
+    },
+    submittedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+// ===================Driver Code End====================
 const userSchema = new Schema<IUser, UserModal>(
   {
     firstName: {
@@ -152,6 +230,13 @@ const userSchema = new Schema<IUser, UserModal>(
       },
       select: 0,
     },
+
+    // ====================Driver Code====================
+    driverRegistration: {
+      type: DriverRegistrationSchema,
+      default: {},
+    },
+    // ==================Driver Code End====================
   },
   {
     timestamps: true,
@@ -175,15 +260,14 @@ const userSchema = new Schema<IUser, UserModal>(
 
 // indexing
 
-
 userSchema.index(
   { email: 1 },
   {
     unique: true,
     partialFilterExpression: {
-      email: { $exists: true, $ne: null }
+      email: { $exists: true, $ne: null },
     },
-  }
+  },
 );
 
 userSchema.index(
@@ -191,11 +275,10 @@ userSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      phone: { $exists: true, $ne: null }
+      phone: { $exists: true, $ne: null },
     },
-  }
+  },
 );
-
 
 //exist user check
 userSchema.statics.isExistUserById = async (id: string) => {

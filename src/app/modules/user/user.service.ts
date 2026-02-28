@@ -106,7 +106,6 @@
 // //   return result;
 // // };
 
-
 // // ================================= Create USER  ================================
 
 // const createUserToDB = async (payload: any) => {
@@ -157,8 +156,6 @@
 
 //   return { user };
 // };
-
-
 
 // const getUserProfileFromDB = async (
 //   user: JwtPayload
@@ -300,12 +297,7 @@ const assertDriver = async (id: string) => {
 const isBasicInfoComplete = (doc: any) => {
   const dob = doc?.driverRegistration?.basicInfo?.dateOfBirth;
   const addr = doc?.driverRegistration?.basicInfo?.address;
-  const hasAddress = !!(
-    addr?.street &&
-    addr?.city &&
-    addr?.state &&
-    addr?.zip
-  );
+  const hasAddress = !!(addr?.street && addr?.city && addr?.state && addr?.zip);
   return !!dob && hasAddress;
 };
 
@@ -415,15 +407,13 @@ const deleteAdminFromDB = async (id: any) => {
 //   return result;
 // };
 
-
 // ================================= Create USER  ================================
 
 const createUserToDB = async (payload: any) => {
-
   if (!payload.email && !payload.phone) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      "Either email or phone is required"
+      "Either email or phone is required",
     );
   }
 
@@ -445,7 +435,7 @@ const createUserToDB = async (payload: any) => {
     });
 
     const template = emailTemplate.createAccount({
-      name: user.fullName||"User",
+      name: user.fullName || "User",
       otp,
       email: user.email,
     });
@@ -467,10 +457,8 @@ const createUserToDB = async (payload: any) => {
   return { user };
 };
 
-
-
 const getUserProfileFromDB = async (
-  user: JwtPayload
+  user: JwtPayload,
 ): Promise<Partial<IUser>> => {
   const { id } = user;
   const isExistUser: any = await User.isExistUserById(id);
@@ -482,7 +470,7 @@ const getUserProfileFromDB = async (
 
 const updateProfileToDB = async (
   user: JwtPayload,
-  payload: Partial<IUser>
+  payload: Partial<IUser>,
 ): Promise<Partial<IUser | null>> => {
   const { id } = user;
   const isExistUser = await User.isExistUserById(id);
@@ -600,15 +588,21 @@ const updateDriverBasicInfoToDB = async (user: JwtPayload, payload: any) => {
   const updatePayload: any = {};
 
   // top-level user fields
-  ["firstName", "lastName", "email", "phone", "countryCode", "profileImage"].forEach(
-    (k) => {
-      if (payload?.[k] !== undefined) updatePayload[k] = payload[k];
-    },
-  );
+  [
+    "firstName",
+    "lastName",
+    "email",
+    "phone",
+    "countryCode",
+    "profileImage",
+  ].forEach((k) => {
+    if (payload?.[k] !== undefined) updatePayload[k] = payload[k];
+  });
 
   // nested driver basic info
   if (payload.dateOfBirth !== undefined) {
-    updatePayload["driverRegistration.basicInfo.dateOfBirth"] = payload.dateOfBirth;
+    updatePayload["driverRegistration.basicInfo.dateOfBirth"] =
+      payload.dateOfBirth;
   }
   if (payload.ssn !== undefined) {
     updatePayload["driverRegistration.basicInfo.ssn"] = payload.ssn;
@@ -625,7 +619,10 @@ const updateDriverBasicInfoToDB = async (user: JwtPayload, payload: any) => {
     { new: true },
   );
   if (!updated)
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update driver basic info");
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Failed to update driver basic info",
+    );
 
   const basicOk = isBasicInfoComplete(updated);
   await User.findByIdAndUpdate(id, {
@@ -633,41 +630,74 @@ const updateDriverBasicInfoToDB = async (user: JwtPayload, payload: any) => {
   });
 
   return getMyDriverRegistrationFromDB({ id } as any);
+  // 1) steps update করার পর latest user আবার fetch করো (full)
+  // const finalUser = await User.findById(id)
+  //   .select("-password -authentication") // security
+  //   .lean();
+
+  // if (!finalUser) {
+  //   throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to load updated user");
+  // }
+
+  // return finalUser;
 };
 
+ 
 const updateDriverVehicleInfoToDB = async (user: JwtPayload, payload: any) => {
   const { id } = user;
   const doc = await assertDriver(id);
 
-  // if new images provided and old exist, unlink old
-  if (payload.vehicleImage && Array.isArray(payload.vehicleImage)) {
-    const old = doc.driverRegistration?.vehicleInfo?.vehicleImage || [];
-    old.forEach((p) => p && unlinkFile(p));
+  const updatePayload: any = {};
+
+  ["vehicleType", "make", "year", "licensePlateNumber", "color"].forEach(
+    (k) => {
+      if (payload?.[k] !== undefined) {
+        updatePayload[`driverRegistration.vehicleInfo.${k}`] = payload[k];
+      }
+    },
+  );
+
+if (payload.vehicleImage) {
+  const imagePath = Array.isArray(payload.vehicleImage)
+    ? payload.vehicleImage[0]
+    : payload.vehicleImage;
+
+  const old = doc.driverRegistration?.vehicleInfo?.vehicleImage as any;
+
+  if (old) {
+    if (Array.isArray(old)) {
+      old.forEach((p) => p && unlinkFile(p));
+    } else {
+      unlinkFile(old);
+    }
   }
 
-  const updatePayload: any = {};
-  ["vehicleType", "make", "year", "licensePlateNumber", "color"].forEach((k) => {
-    if (payload?.[k] !== undefined) {
-      updatePayload[`driverRegistration.vehicleInfo.${k}`] = payload[k];
-    }
-  });
-  if (payload.vehicleImage !== undefined) {
-    updatePayload["driverRegistration.vehicleInfo.vehicleImage"] = payload.vehicleImage;
+  updatePayload["driverRegistration.vehicleInfo.vehicleImage"] = imagePath;
+}
+
+  if (Object.keys(updatePayload).length === 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "No vehicle info provided");
   }
 
   const updated = await User.findByIdAndUpdate(
     id,
     { $set: updatePayload },
-    { new: true },
+    { new: true, runValidators: true },
   );
+
   if (!updated)
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update driver vehicle info");
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Failed to update driver vehicle info",
+    );
 
   const vehicleOk = isVehicleInfoComplete(updated);
+
   await User.findByIdAndUpdate(id, {
     $set: { "driverRegistration.steps.vehicleInfoCompleted": vehicleOk },
   });
 
+  // return await User.findById(id).select("-password -authentication").lean();
   return getMyDriverRegistrationFromDB({ id } as any);
 };
 
@@ -699,7 +729,10 @@ const updateDriverRequiredDocsToDB = async (user: JwtPayload, payload: any) => {
     { new: true },
   );
   if (!updated)
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update required documents");
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Failed to update required documents",
+    );
 
   const docsOk = isDocsComplete(updated);
   await User.findByIdAndUpdate(id, {
@@ -732,11 +765,13 @@ const submitDriverApplicationToDB = async (user: JwtPayload) => {
   const { id } = user;
   await assertDriver(id);
   const current = await User.findById(id);
-  if (!current) throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+  if (!current)
+    throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
 
   const steps = current.driverRegistration?.steps || {};
   const basicOk = steps.basicInfoCompleted || isBasicInfoComplete(current);
-  const vehicleOk = steps.vehicleInfoCompleted || isVehicleInfoComplete(current);
+  const vehicleOk =
+    steps.vehicleInfoCompleted || isVehicleInfoComplete(current);
   const docsOk = steps.requiredDocsCompleted || isDocsComplete(current);
 
   if (!basicOk || !vehicleOk || !docsOk) {
