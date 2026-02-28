@@ -2,7 +2,7 @@ import { StatusCodes } from "http-status-codes";
 import twilio, { Twilio } from "twilio";
 import config from "../config";
 import ApiError from "../errors/ApiErrors";
- 
+
 
 interface PhoneFormatConfig {
   defaultCountryCode: string;
@@ -47,6 +47,8 @@ class TwilioService {
     };
   }
 
+
+
   // ✅ Format phone number to E.164 format
   private formatPhoneNumber(phoneNumber: string, countryCode?: string): string {
     let phone = phoneNumber.trim().replace(/\s+/g, ""); // Remove spaces
@@ -56,6 +58,8 @@ class TwilioService {
       const isValid = this.phoneConfig.countryCodes.some((code) =>
         phone.startsWith(code),
       );
+
+
 
       if (isValid) {
         return phone;
@@ -99,8 +103,12 @@ class TwilioService {
       console.log("Original phone:", phoneNumber);
       console.log("Country code:", countryCode);
       console.log("Formatted phone:", formattedPhone);
-      const serviceSid = "VA7c605b790f2007d17554707a24d7ad37";
+      const serviceSid = config.twilio.serviceSid;
       console.log("Service SID:", serviceSid);
+
+      console.log("TWILIO_ACCOUNT_SID:", config.twilio.accountSid ? "OK" : "Missing");
+      console.log("TWILIO_AUTH_TOKEN:", config.twilio.authToken ? "OK" : "Missing");
+      console.log("TWILIO_SERVICE_SID:", config.twilio.serviceSid ? "OK" : "Missing");
       if (!serviceSid) {
         throw new ApiError(
           StatusCodes.INTERNAL_SERVER_ERROR,
@@ -109,7 +117,7 @@ class TwilioService {
       }
 
       const verification = await this.client.verify.v2
-        .services("VA7c605b790f2007d17554707a24d7ad37")
+        .services(serviceSid)
         .verifications.create({
           to: formattedPhone,
           channel: "sms",
@@ -147,7 +155,7 @@ class TwilioService {
       console.log("Code:", code);
 
       const verification = await this.client.verify.v2
-        .services("VA7c605b790f2007d17554707a24d7ad37")
+        .services(config.twilio.serviceSid as string)
         .verificationChecks.create({
           to: formattedPhone,
           code: code,

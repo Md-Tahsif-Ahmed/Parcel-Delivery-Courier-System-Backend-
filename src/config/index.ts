@@ -14,7 +14,7 @@ export default {
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
   },
-
+  
   // cinetpay: {
   //   CINATPAY_SITE_ID: process.env.CINATPAY_SITE_ID!,
   //   CINATPAY_API_KEY: process.env.CINATPAY_API_KEY!,
@@ -40,6 +40,10 @@ export default {
   admin: {
     email: process.env.ADMIN_EMAIL,
     password: process.env.ADMIN_PASSWORD,
+  },
+  agora: {
+    appId: process.env.AGORA_APP_ID,
+    primaryCertificate: process.env.AGORA_PRIMARY_CERTIFICATE,
   },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,

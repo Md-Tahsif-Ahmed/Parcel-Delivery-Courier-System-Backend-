@@ -6,11 +6,9 @@ import ApiError from "../../../errors/ApiErrors";
 import { emailHelper } from "../../../helpers/emailHelper";
 import { jwtHelper } from "../../../helpers/jwtHelper";
 import { emailTemplate } from "../../../shared/emailTemplate";
- 
 import {
   IAuthResetPassword,
   IChangePassword,
-  ILoginData,
   IVerifyEmail,
   IVerifyEmailResponse,
 } from "../../../types/auth";
@@ -20,12 +18,10 @@ import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import { OAuth2Client } from "google-auth-library";
 import { twilioService } from "../../../helpers/smsHelper";
-import e from "express";
 import cryptoToken from "../../../util/cryptoToken";
 
 
-//  google login 
-
+// google login 
 const client = new OAuth2Client(config.google.clientId);
 
 const googleLogin = async (idToken: string) => {
@@ -177,28 +173,113 @@ const loginUserFromDB = async (payload: {
 
 
 // forget password
-const forgetPasswordToDB = async (email: string) => {
-  const isExistUser = await User.isExistUserByEmail(email);
-  if (!isExistUser) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+// const forgetPasswordToDB = async (email: string) => {
+//   const isExistUser = await User.isExistUserByEmail(email);
+//   if (!isExistUser) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+//   }
+
+//   // send mail
+//   const otp = generateOTP();
+//   const value = {
+//     otp,
+//     email: isExistUser.email,
+//   };
+
+//   const forgetPassword = emailTemplate.resetPassword(value);
+//   emailHelper.sendEmail(forgetPassword);
+
+//   // save to DB
+//   const authentication = {
+//     oneTimeCode: otp,
+//     expireAt: new Date(Date.now() + 3 * 60000),
+//   };
+//   await User.findOneAndUpdate({ email }, { $set: { authentication } });
+// };
+
+// ==================twilio forget password system==========================
+const forgetPasswordToDB = async (payload: any) => {
+  const { email, phone, countryCode } = payload;
+
+  if (!email && !phone) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Provide phone or email!");
   }
 
-  // send mail
-  const otp = generateOTP();
-  const value = {
-    otp,
-    email: isExistUser.email,
-  };
+  let user;
 
-  const forgetPassword = emailTemplate.resetPassword(value);
-  emailHelper.sendEmail(forgetPassword);
+  // ===============================
+  //  1 ) PHONE FLOW (priority 1)
+  // ===============================
 
-  // save to DB
-  const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 3 * 60000),
-  };
-  await User.findOneAndUpdate({ email }, { $set: { authentication } });
+  if (phone) {
+    if (!countryCode) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "countryCode is required for phone",
+      );
+    }
+
+    user = await User.findOne({ phone, countryCode });
+
+    if (!user) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    }
+
+    // generate OTP
+    const otp = generateOTP();
+
+    // Twilio send
+    await twilioService.sendOTPWithVerify(phone, countryCode);
+
+    // save OTP
+    const authentication = {
+      oneTimeCode: otp,
+      expireAt: new Date(Date.now() + 3 * 60 * 1000), // 3 minutes
+    };
+
+    await User.findOneAndUpdate(
+      { phone, countryCode },
+      { $set: { authentication } },
+    );
+
+    return { via: "phone", phone, countryCode };
+  }
+
+  // ===============================
+  //  2 ) EMAIL FLOW (priority 2)
+  // ===============================
+
+  if (email) {
+    const userByEmail = await User.isExistUserByEmail(email);
+
+    if (!userByEmail) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+    }
+
+    // generate OTP
+    const otp = generateOTP();
+
+    // template
+    const value = { otp, email: userByEmail.email };
+    const forgetPassword = emailTemplate.resetPassword(value);
+
+    // send mail
+    emailHelper.sendEmail(forgetPassword);
+
+    // save in DB
+    const authentication = {
+      oneTimeCode: otp,
+      expireAt: new Date(Date.now() + 3 * 60 * 1000),
+    };
+
+    await User.findOneAndUpdate(
+      { email },
+      { $set: { authentication } },
+      { new: true },
+    );
+
+    return { via: "email", email };
+  }
 };
 
 // ======================= verify email start ========================
@@ -287,8 +368,12 @@ const verifyPhoneToDB = async (payload: {
   phone: string;
   code: string;
   countryCode: string;
-}) => {
-
+}): Promise<{
+  token?: string;
+  user?: any;
+  resetToken?: string;
+  message: string;
+}> => {
   const { phone, code, countryCode } = payload;
 
   const user = await User.findOne({ phone });
@@ -297,36 +382,49 @@ const verifyPhoneToDB = async (payload: {
     throw new ApiError(StatusCodes.BAD_REQUEST, "User not found");
   }
 
-  const isApproved = await twilioService.verifyOTP(
-    phone,
-    code,
-    countryCode
-  );
+  const isApproved = await twilioService.verifyOTP(phone, code, countryCode);
 
   if (!isApproved) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Invalid or expired OTP"
-    );
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid or expired OTP");
   }
 
-  user.verified = true;
+  // 🔹 CASE 1: Phone Verify
+  if (!user.verified) {
+    user.verified = true;
+    await user.save();
+
+    const token = jwtHelper.createToken(
+      {
+        id: user._id,
+        role: user.role,
+        email: user.email,
+        phone: user.phone,
+      },
+      config.jwt.jwt_secret as Secret,
+      config.jwt.jwt_expire_in as string
+    );
+
+    return {
+      message: "Phone verified successfully",
+      token,
+      user,
+    };
+  }
+
+  // 🔹 CASE 2: Forgot Password for phone users
+  const resetToken = cryptoToken();
+
+  await ResetToken.create({
+    user: user._id,
+    token: resetToken,
+    expireAt: new Date(Date.now() + 5 * 60 * 1000), // 5 min expiry
+  });
+
   await user.save();
 
-  const token = jwtHelper.createToken(
-    {
-      id: user._id,
-      role: user.role,
-      email: user.email,
-      phone: user.phone,
-    },
-    config.jwt.jwt_secret as Secret,
-    config.jwt.jwt_expire_in as string
-  );
-
   return {
-    token,
-    user,
+    message: "OTP verified. Use reset token to change password",
+    resetToken,
   };
 };
 
@@ -461,51 +559,51 @@ const newAccessTokenToUser = async (token: string) => {
   return { accessToken };
 };
 
-const resendVerificationEmailToDB = async (email: string) => {
-  const existingUser = await User.findOne({ email }).select(
-    "email firstName verified"
-  );
+// const resendVerificationEmailToDB = async (email: string) => {
+//   const existingUser = await User.findOne({ email }).select(
+//     "email firstName verified"
+//   );
 
-  if (!existingUser) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      "User with this email does not exist!"
-    );
-  }
+//   if (!existingUser) {
+//     throw new ApiError(
+//       StatusCodes.NOT_FOUND,
+//       "User with this email does not exist!"
+//     );
+//   }
 
-  if (existingUser.verified) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "User is already verified!"
-    );
-  }
+//   if (existingUser.verified) {
+//     throw new ApiError(
+//       StatusCodes.BAD_REQUEST,
+//       "User is already verified!"
+//     );
+//   }
 
-  const otp = generateOTP();
+//   const otp = generateOTP();
 
-  const authentication = {
-    oneTimeCode: otp,
-    expireAt: new Date(Date.now() + 3 * 60 * 1000),
-  };
+//   const authentication = {
+//     oneTimeCode: otp,
+//     expireAt: new Date(Date.now() + 3 * 60 * 1000),
+//   };
 
-  await User.updateOne(
-    { _id: existingUser._id },
-    { $set: { authentication } }
-  );
+//   await User.updateOne(
+//     { _id: existingUser._id },
+//     { $set: { authentication } }
+//   );
 
-  const template = emailTemplate.createAccount({
-    name: existingUser.firstName,
-    email: existingUser.email,
-    otp,
-  });
+//   const template = emailTemplate.createAccount({
+//     name: existingUser.firstName,
+//     email: existingUser.email,
+//     otp,
+//   });
 
-  await emailHelper.sendEmail({
-    to: existingUser.email,
-    subject: template.subject,
-    html: template.html,
-  });
+//   await emailHelper.sendEmail({
+//     to: existingUser.email,
+//     subject: template.subject,
+//     html: template.html,
+//   });
 
-  return null;
-};
+//   return null;
+// };
 
 // const deleteUserFromDB = async (user: JwtPayload, password: string) => {
 //   const isExistUser = await User.findById(user.id).select("+password");
@@ -528,6 +626,59 @@ const resendVerificationEmailToDB = async (email: string) => {
 //   return;
 // };
 
+const resendVerification = async (email?: string, phone?: string, countryCode?: string) => {
+  let user;
+
+  if (email) {
+    user = await User.findOne({ email }).select("email firstName phone countryCode verified");
+  } else if (phone && countryCode) {
+    user = await User.findOne({ phone, countryCode }).select("email firstName phone countryCode verified");
+  } else {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Email or phone must be provided");
+  }
+
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found!");
+  }
+
+  if (user.verified) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "User is already verified!");
+  }
+
+  // If email exists, send email OTP
+  if (user.email) {
+    const otp = generateOTP();
+    const authentication = {
+      oneTimeCode: otp,
+      expireAt: new Date(Date.now() + 3 * 60 * 1000),
+    };
+
+    await User.updateOne({ _id: user._id }, { $set: { authentication } });
+
+    const template = emailTemplate.createAccount({
+      name: user.firstName,
+      email: user.email,
+      otp,
+    });
+
+    await emailHelper.sendEmail({
+      to: user.email,
+      subject: template.subject,
+      html: template.html,
+    });
+
+    return { method: "email", message: "OTP sent to email" };
+  }
+
+  // If phone exists, send SMS OTP
+  if (user.phone && user.countryCode) {
+    const result = await twilioService.sendOTPWithVerify(user.phone, user.countryCode);
+    return { method: "phone", message: "OTP sent to phone", twilioResult: result };
+  }
+
+  throw new ApiError(StatusCodes.BAD_REQUEST, "No valid verification method available for this user");
+};
+
 export const AuthService = {
   googleLogin,
   verifyEmailToDB,
@@ -537,6 +688,6 @@ export const AuthService = {
   resetPasswordToDB,
   changePasswordToDB,
   newAccessTokenToUser,
-  resendVerificationEmailToDB,
+  resendVerification,
   // deleteUserFromDB,
 };

@@ -19,13 +19,12 @@ router.post(
 
 router.post(
   "/forget-password",
-  validateRequest(AuthValidation.createForgetPasswordZodSchema),
   AuthController.forgetPassword,
 );
 
 router.post("/refresh-token", AuthController.newAccessToken);
 
-router.post("/resend-otp", AuthController.resendVerificationEmail);
+router.post("/resend-otp", AuthController.resendVerification);
 
 router.post(
   "/verify-email",
@@ -69,7 +68,7 @@ router.post(
 
 router.post(
   "/reset-password",
-  auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER),
+  // auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER),
   validateRequest(AuthValidation.createResetPasswordZodSchema),
   AuthController.resetPassword,
 );

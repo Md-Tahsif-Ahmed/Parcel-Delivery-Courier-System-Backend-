@@ -122,10 +122,10 @@ const newAccessToken = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const resendVerificationEmail = catchAsync(
+const resendVerification = catchAsync(
   async (req: Request, res: Response) => {
     const { email } = req.body;
-    const result = await AuthService.resendVerificationEmailToDB(email);
+    const result = await AuthService.resendVerification(email);
 
     sendResponse(res, {
       success: true,
@@ -160,6 +160,6 @@ export const AuthController = {
   resetPassword,
   changePassword,
   newAccessToken,
-  resendVerificationEmail,
+  resendVerification,
   // deleteUser,
 };
