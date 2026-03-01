@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get(
   "/",
-  auth(USER_ROLES.USER),
+  auth(USER_ROLES.CUSTOMER),
   NotificationController.getNotificationFromDB,
 );
 router.get(
@@ -16,12 +16,12 @@ router.get(
 );
 router.patch(
   "/",
-  auth(USER_ROLES.USER),
+  auth(USER_ROLES.CUSTOMER),
   NotificationController.readNotification,
 );
 router.patch(
   "/admin",
-  auth(USER_ROLES.USER),
+  auth(USER_ROLES.CUSTOMER),
   NotificationController.adminReadNotification,
 );
 

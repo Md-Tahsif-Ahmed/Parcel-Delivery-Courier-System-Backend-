@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Receiver</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
+</head>
+<body>
+  <h2>Receiver</h2>
+  <button onclick="joinCall()">Join Call</button>
+
+  <div id="remote-player"></div>
+
+  <script>
+    const APP_ID = "0b2d9a707a42455ca250ed110ba0a257";
+    const channel = "call_69a3b38a70e9a5c2c4c77726";
+
+    const token = "007eJxTYIg58W6C/PWbD0xN780X/z972xKWU2JO0fPSYrs3GLzsefZTgcEgySjFMtHcwDzRxMjE1DQ50cjUIDXF0NAgKdEg0cjUfPnmxZnbDy7O3FskyszIwMjAwsDIAOIzgUlmMMkCJmUZkhNzcuLNLBONk4wtEs0NUi0TTZONkk2Szc3Njcy4GIyNjIwsLQ0MLY0BDIE1dQ==";
+    const uid = 3222990193; // example: 3222990193
+
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+    async function joinCall() {
+      await client.join(APP_ID, channel, token, uid);
+
+      client.on("user-published", async (user, mediaType) => {
+        await client.subscribe(user, mediaType);
+
+        if (mediaType === "audio") {
+          user.audioTrack.play();
+          console.log("Receiving audio...");
+        }
+      });
+
+      console.log("Receiver joined");
+      alert("Receiver joined");
+    }
+  </script>
+</body>
+</html>

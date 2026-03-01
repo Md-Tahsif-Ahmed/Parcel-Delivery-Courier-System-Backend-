@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { CALL_STATUS } from "./call.utils";
+import { CALL_STATUS } from "./callSession.constant";
 
 export interface ICallSession {
   channelName: string;

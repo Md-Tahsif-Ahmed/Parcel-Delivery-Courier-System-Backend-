@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Caller</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
+</head>
+<body>
+  <h2>Caller</h2>
+  <button onclick="joinCall()">Join Call</button>
+
+  <script>
+    const APP_ID = "0b2d9a707a42455ca250ed110ba0a257";
+    const channel = "call_69a3b38a70e9a5c2c4c77726";
+    const token = "007eJxTYHjEX5G15Xb5meKOf/f9r1gbb353g/HEbZVb7ypk/m7bXrtZgcEgySjFMtHcwDzRxMjE1DQ50cjUIDXF0NAgKdEg0cjUfPnmxZnbDy7OfLB8HSMjAyMDCwMjA4jPBCaZwSQLmJRlSE7MyYk3s0w0TjK2SDQ3SLVMNE02SjZJNjc3NzLjYjC0sDQ1MDI0MDIEAAfSN7o=";
+    const uid = 1895021021;
+
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+    async function joinCall() {
+      try {
+        console.log("Joining...");
+        await client.join(APP_ID, channel, token, uid);
+        console.log("Joined channel");
+
+        const localTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        console.log("Mic track created");
+
+        await client.publish([localTrack]);
+        console.log("Published audio");
+
+        alert("Caller joined successfully!");
+      } catch (err) {
+        console.error("ERROR:", err);
+        alert("Error occurred. Check console.");
+      }
+    }
+  </script>
+</body>
+</html>

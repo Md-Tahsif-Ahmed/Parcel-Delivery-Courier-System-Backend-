@@ -16,7 +16,7 @@ router.post(
 );
 router.post(
   "/create-membership-checkout",
-  auth(USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   PaymentController.createMembershipCheckout
 );
 router.get("/success", PaymentController.success);

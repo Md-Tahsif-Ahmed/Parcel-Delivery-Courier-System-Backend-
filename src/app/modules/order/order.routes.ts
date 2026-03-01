@@ -8,7 +8,7 @@ import { OrderValidation } from "./order.validation";
 const router = express.Router();
 
 /* ---------------------------- AUTH HELPERS ---------------------------- */
-const requireUser = auth(USER_ROLES.USER);
+const requireUser = auth(USER_ROLES.CUSTOMER);
 const requireAdminOrSuperAdmin = auth(
   USER_ROLES.ADMIN,
   USER_ROLES.SUPER_ADMIN
@@ -16,7 +16,7 @@ const requireAdminOrSuperAdmin = auth(
 const requireAnyUser = auth(
   USER_ROLES.ADMIN,
   USER_ROLES.SUPER_ADMIN,
-  USER_ROLES.USER
+  USER_ROLES.CUSTOMER
 );
 
 router.post(
@@ -28,9 +28,8 @@ router.post(
 
 /* ---------------------------- ORDER CREATE ---------------------------- */
 router.post(
-  "/",
-  requireUser,
-  validateRequest(OrderValidation.createOrderZodSchema),
+  "/create",
+  auth(USER_ROLES.CUSTOMER),
   OrderController.createOrder
 );
 
@@ -70,7 +69,7 @@ router
   auth(
     USER_ROLES.ADMIN,
     USER_ROLES.SUPER_ADMIN,
-    USER_ROLES.USER
+    USER_ROLES.CUSTOMER
   ),
   OrderController.cancelOrderController
 );

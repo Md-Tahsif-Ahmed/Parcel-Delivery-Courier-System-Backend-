@@ -6,7 +6,7 @@ const router = Router();
 
 router.post(
   '/',
-  auth(USER_ROLES.HOST),
+  auth(USER_ROLES.DRIVER),
   StripeControllers.createStripeAccount
 );
 export const stripeCEARoutes = router;
