@@ -9,7 +9,7 @@ const initialCall = catchAsync(async (req, res) => {
     const { receiverId } = req.body;
 
     const result = await callSessionServices.createCallSession(callerId, receiverId);
-    
+
     sendResponse(res,{
         success:true,
         statusCode:200,
@@ -50,7 +50,9 @@ const rejectCall = catchAsync(async (req: Request, res: Response) => {
 const endCall = catchAsync(async (req: Request, res: Response) => {
     const { sessionId } = req.body;
 
-    await callSessionServices.endCallSession(sessionId);
+    const { id:endedBy } = req.user as any;
+
+    await callSessionServices.endCallSession(sessionId, endedBy);
 
     sendResponse(res,{
         success:true,
