@@ -86,8 +86,9 @@ const createCallSession = async (callerId: string, receiverId: string) => {
             latest.status = CALL_STATUS.REJECTED;
             latest.endedAt = new Date();
             await latest.save();
-            emitToUser(callerId, "call_rejected", { sessionId: latest._id.toString(), reason: "No answer" });
-            emitToUser(receiverId, "call_missed", { sessionId: latest._id.toString() });
+            const rejectedByUser = await getUserInfo(callerId);
+            emitToUser(callerId, "call_rejected", { sessionId: latest._id.toString(), reason: "No answer", rejectedBy: rejectedByUser });
+            emitToUser(receiverId, "call_missed", { sessionId: latest._id.toString(), missedBy: rejectedByUser });
         }
     }, MAX_RINGING_TIME);
 
@@ -123,8 +124,8 @@ const acceptCallSession = async (sessionId: string, userId: string) => {
         receiver: receiverInfo,
     };
 
-    emitToUser(session.caller.toString(), "call_accepted", data);
-    emitToUser(session.receiver.toString(), "call_accepted", data);
+    emitToUser(session.caller.toString(), "call_accepted", { sessionId, ...data });
+    emitToUser(session.receiver.toString(), "call_accepted", { sessionId, ...data });
 
     return data;
 }
@@ -132,7 +133,7 @@ const acceptCallSession = async (sessionId: string, userId: string) => {
 // --------------------------------------------------
 // REJECT CALL
 // --------------------------------------------------
-const rejectCallSession = async (sessionId: string, userId: string, reason = "Rejected by user") => {
+const rejectCallSession = async (sessionId: string, userId: string) => {
     const session = await CallSession.findById(sessionId);
     if (!session || session.status !== CALL_STATUS.RINGING) return;
 
@@ -140,8 +141,10 @@ const rejectCallSession = async (sessionId: string, userId: string, reason = "Re
     session.endedAt = new Date();
     await session.save();
 
-    emitToUser(session.caller.toString(), "call_rejected", { sessionId, reason });
-    emitToUser(session.receiver.toString(), "call_rejected", { sessionId, reason });
+    const user= await getUserInfo(userId);
+
+    emitToUser(session.caller.toString(), "call_rejected", { sessionId, user });
+    emitToUser(session.receiver.toString(), "call_rejected", { sessionId, user });
 }
 
 // --------------------------------------------------
@@ -155,8 +158,10 @@ const endCallSession = async (sessionId: string, endedBy?: string) => {
     session.endedAt = new Date();
     await session.save();
 
-    emitToUser(session.caller.toString(), "call_ended", { sessionId, endedBy });
-    emitToUser(session.receiver.toString(), "call_ended", { sessionId, endedBy });
+    const endedByUser = await getUserInfo(endedBy || "");
+
+    emitToUser(session.caller.toString(), "call_ended", { sessionId, endedBy: endedByUser });
+    emitToUser(session.receiver.toString(), "call_ended", { sessionId, endedBy: endedByUser });
 }
 
 // --------------------------------------------------
