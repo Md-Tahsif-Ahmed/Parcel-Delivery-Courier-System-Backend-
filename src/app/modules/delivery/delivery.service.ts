@@ -903,6 +903,126 @@ export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) =>
 
 
 
+// export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
+//   if (user.role !== USER_ROLES.DRIVER) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
+//   }
+
+//   const radiusKm = Number(query.radiusKm ?? 5);
+//   const limit = Number(query.limit ?? 20);
+
+//   const driver = await User.findById(user.id).lean();
+//   if (!driver?.driverStatus?.location?.coordinates) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver location not set");
+//   }
+
+//   const [lng, lat] = driver.driverStatus.location.coordinates;
+
+//   const vehicleType = driver?.driverRegistration?.vehicleInfo?.vehicleType;
+//   if (!vehicleType) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver vehicleType not set");
+//   }
+
+//   const usersCollection = User.collection.name; // ✅ real collection name
+
+//   const available = await Delivery.aggregate([
+//     {
+//       $geoNear: {
+//         near: { type: "Point", coordinates: [lng, lat] },
+//         distanceField: "distanceMeters",
+//         spherical: true,
+//         maxDistance: radiusKm * 1000,
+//         query: {
+//           status: DELIVERY_STATUS.OPEN,
+//           vehicleType,
+//         },
+//       },
+//     },
+//     { $sort: { createdAt: -1 } },
+//     { $limit: limit },
+
+//     // ✅ lookup customer
+//     {
+//       $lookup: {
+//         from: usersCollection,
+//         localField: "customerId",
+//         foreignField: "_id",
+//         as: "customer",
+//         pipeline: [
+//           {
+//             $project: {
+//               _id: 1,
+//               firstName: 1,
+//               lastName: 1,
+//               fullName: 1,
+//               // চাইলে image field যোগ করবেন (আপনার স্কিমা অনুযায়ী)
+//               // avatar: 1,
+//               // photoUrl: 1,
+//             },
+//           },
+//         ],
+//       },
+//     },
+//     { $unwind: { path: "$customer", preserveNullAndEmptyArrays: true } },
+
+//     // ✅ optional: UI-friendly name fallback
+//     {
+//       $addFields: {
+//         customerName: {
+//           $ifNull: [
+//             "$customer.fullName",
+//             {
+//               $trim: {
+//                 input: { $concat: ["$customer.firstName", " ", "$customer.lastName"] },
+//               },
+//             },
+//           ],
+//         },
+//       },
+//     },
+
+//     // ✅ keep response small & controlled
+//     {
+//       $project: {
+//         customerId: 1,
+//         customer: 1,
+//         customerName: 1,
+//         selectedDriverId: 1,
+//         vehicleType: 1,
+//         pickup: 1,
+//         dropoff: 1,
+//         receiver: { name: 1, note: 1 },
+//         parcel: 1,
+//         pricing: 1,
+//         customerOfferFare: 1,
+//         status: 1,
+//         createdAt: 1,
+//         updatedAt: 1,
+//         distanceMeters: 1,
+//       },
+//     },
+//   ]);
+
+//   const activeStatuses = [
+//     DELIVERY_STATUS.ACCEPTED,
+//     DELIVERY_STATUS.PAYMENT_PENDING,
+//     DELIVERY_STATUS.PAID,
+//     DELIVERY_STATUS.IN_DELIVERY,
+//     DELIVERY_STATUS.DELIVERED_BY_DRIVER,
+//   ];
+
+//   const active = await Delivery.find({
+//     selectedDriverId: user.id,
+//     status: { $in: activeStatuses },
+//   })
+//     .sort({ createdAt: -1 })
+//     .limit(limit)
+//     .populate("customerId", "firstName lastName fullName") // ✅ schema অনুযায়ী
+//     .lean();
+
+//   return { available, active };
+// };
+
 export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
   if (user.role !== USER_ROLES.DRIVER) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
@@ -923,7 +1043,8 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver vehicleType not set");
   }
 
-  const usersCollection = User.collection.name; // ✅ real collection name
+  const usersCollection = User.collection.name;
+  const deliveriesCollection = Delivery.collection.name;
 
   const available = await Delivery.aggregate([
     {
@@ -941,7 +1062,6 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
     { $sort: { createdAt: -1 } },
     { $limit: limit },
 
-    // ✅ lookup customer
     {
       $lookup: {
         from: usersCollection,
@@ -955,9 +1075,6 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
               firstName: 1,
               lastName: 1,
               fullName: 1,
-              // চাইলে image field যোগ করবেন (আপনার স্কিমা অনুযায়ী)
-              // avatar: 1,
-              // photoUrl: 1,
             },
           },
         ],
@@ -965,7 +1082,31 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
     },
     { $unwind: { path: "$customer", preserveNullAndEmptyArrays: true } },
 
-    // ✅ optional: UI-friendly name fallback
+    {
+      $lookup: {
+        from: deliveriesCollection,
+        let: { customerId: "$customerId" },
+        as: "customerRatingStats",
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $eq: ["$customerId", "$$customerId"],
+              },
+              "rating.driverToCustomer.stars": { $exists: true },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              average: { $avg: "$rating.driverToCustomer.stars" },
+              count: { $sum: 1 },
+            },
+          },
+        ],
+      },
+    },
+
     {
       $addFields: {
         customerName: {
@@ -973,25 +1114,50 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
             "$customer.fullName",
             {
               $trim: {
-                input: { $concat: ["$customer.firstName", " ", "$customer.lastName"] },
+                input: {
+                  $concat: [
+                    { $ifNull: ["$customer.firstName", ""] },
+                    " ",
+                    { $ifNull: ["$customer.lastName", ""] },
+                  ],
+                },
               },
             },
           ],
         },
+        customerRating: {
+          average: {
+            $round: [
+              {
+                $ifNull: [
+                  { $arrayElemAt: ["$customerRatingStats.average", 0] },
+                  0,
+                ],
+              },
+              1,
+            ],
+          },
+          count: {
+            $ifNull: [
+              { $arrayElemAt: ["$customerRatingStats.count", 0] },
+              0,
+            ],
+          },
+        },
       },
     },
 
-    // ✅ keep response small & controlled
     {
       $project: {
         customerId: 1,
         customer: 1,
         customerName: 1,
+        customerRating: 1,
         selectedDriverId: 1,
         vehicleType: 1,
         pickup: 1,
         dropoff: 1,
-        receiver: { name: 1, note: 1 },
+        receiver: 1,
         parcel: 1,
         pricing: 1,
         customerOfferFare: 1,
@@ -1011,14 +1177,52 @@ export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
     DELIVERY_STATUS.DELIVERED_BY_DRIVER,
   ];
 
-  const active = await Delivery.find({
+  const activeRaw = await Delivery.find({
     selectedDriverId: user.id,
     status: { $in: activeStatuses },
   })
     .sort({ createdAt: -1 })
     .limit(limit)
-    .populate("customerId", "firstName lastName fullName") // ✅ schema অনুযায়ী
+    .populate("customerId", "firstName lastName fullName")
     .lean();
+
+  const active = await Promise.all(
+    activeRaw.map(async (delivery) => {
+      const customerId = delivery.customerId?._id;
+      let customerRating = { average: 0, count: 0 };
+
+      if (customerId) {
+        const [stats] = await Delivery.aggregate([
+          {
+            $match: {
+              customerId,
+              "rating.driverToCustomer.stars": { $exists: true },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              average: { $avg: "$rating.driverToCustomer.stars" },
+              count: { $sum: 1 },
+            },
+          },
+        ]);
+
+        customerRating = {
+          average: Number((stats?.average ?? 0).toFixed(1)),
+          count: stats?.count ?? 0,
+        };
+      }
+
+      return {
+        ...delivery,
+        customerName:
+          delivery.customerId?.fullName ||
+          `${delivery.customerId?.firstName ?? ""} ${delivery.customerId?.lastName ?? ""}`.trim(),
+        customerRating,
+      };
+    })
+  );
 
   return { available, active };
 };
