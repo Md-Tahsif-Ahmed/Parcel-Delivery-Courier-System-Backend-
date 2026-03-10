@@ -1,7 +1,6 @@
-// models/GeneralSettings.js
-const mongoose = require("mongoose");
+import mongoose, { model } from "mongoose";
 
-const GeneralSettingsSchema = new mongoose.Schema(
+const generalSettingsSchema = new mongoose.Schema(
   {
     companyName: {
       type: String,
@@ -48,4 +47,4 @@ const GeneralSettingsSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("GeneralSettings", GeneralSettingsSchema);
+export const GeneralSettings=model("GeneralSettings",generalSettingsSchema)
