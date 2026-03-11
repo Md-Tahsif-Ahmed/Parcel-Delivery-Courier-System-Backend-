@@ -21,6 +21,12 @@ router.get("/delivery-details/:deliveryId", auth(USER_ROLES.ADMIN, USER_ROLES.SU
 
 router.get("/delivery-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDeliveryStats);
 
+router.get("/all-transactions-details", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAllTransactionsDetails);
+
+router.get("/transaction-details/:transactionId", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getTransactionDetails);
+
+router.get("/transaction-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getTransactionStats);
+
 
 
 export const AnalyticsRoutes = router;

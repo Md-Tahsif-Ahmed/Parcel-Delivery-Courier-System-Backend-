@@ -531,6 +531,140 @@ const getDeliveryStatsService = async () => {
   };
 };
 
+// -------------------- Reusable Formatter --------------------
+
+const formatTransaction = (transaction: any) => {
+  const customer = transaction.customerId as any;
+  const driver = transaction.driverId as any;
+
+  return {
+    id: transaction._id,
+    deliveryId: transaction.deliveryId,
+    customer: customer
+      ? {
+          id: customer._id,
+          name: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          phone: customer.phone,
+          profileImage: customer.profileImage,
+          countryCode: customer.countryCode,
+          status: customer.status,
+        }
+      : null,
+
+    driver: driver
+      ? {
+          id: driver._id,
+          name: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
+          email: driver.email,
+          phone: driver.phone,
+          profileImage: driver.profileImage,
+          countryCode: driver.countryCode,
+          status: driver.status,
+        }
+      : null,
+
+    transactionId: transaction.stripePaymentIntentId,
+    date: transaction.createdAt,
+    totalAmount: {
+      amount: transaction.amount,
+      currency: transaction.currency,
+    },
+    adminAmount: {
+      amount: transaction.commissionAmount,
+      commissionRate: transaction.commissionRate,
+      currency: transaction.currency,
+    },
+    status: transaction.status,
+  };
+};
+
+// -------------------- Single Transaction --------------------
+
+const getTransactionDetailsService = async (transactionId: string) => {
+  const transaction = await Transaction.findById(transactionId)
+    .populate({
+      path: "customerId",
+      select: "firstName lastName fullName email phone profileImage countryCode status",
+    })
+    .populate({
+      path: "driverId",
+      select: "firstName lastName fullName email phone profileImage countryCode status",
+    });
+
+  if (!transaction) throw new Error("Transaction not found");
+
+  return formatTransaction(transaction);
+};
+
+// -------------------- All Transactions --------------------
+
+const getAllTransactionsDetailsService = async (query: Record<string, any>) => {
+  const transactionQuery = new QueryBuilder(
+    Transaction.find()
+      .populate({
+        path: "customerId",
+        select: "firstName lastName fullName email phone profileImage countryCode status",
+      })
+      .populate({
+        path: "driverId",
+        select: "firstName lastName fullName email phone profileImage countryCode status",
+      }),
+    query
+  )
+    .filter()
+    .sort()
+    .paginate();
+
+  const [transactions, meta] = await Promise.all([
+    transactionQuery.modelQuery,
+    transactionQuery.countTotal(),
+  ]);
+
+  if (!transactions.length) return { data: [], meta };
+
+  return {
+    data: transactions.map((transaction: any) => formatTransaction(transaction)),
+    meta,
+  };
+};
+
+const getTransactionStatsService = async () => {
+  const stats = await Transaction.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+        totalAmount: { $sum: "$amount" },
+      },
+    },
+  ]);
+
+  const statusMap: Record<string, { count: number; totalAmount: number }> = {};
+  stats.forEach((s) => {
+    statusMap[s._id] = { count: s.count, totalAmount: s.totalAmount };
+  });
+
+  return {
+    total: {
+      count: stats.reduce((acc, s) => acc + s.count, 0),
+      amount: stats.reduce((acc, s) => acc + s.totalAmount, 0),
+    },
+    completed: {
+      count: statusMap["SUCCEEDED"]?.count ?? 0,
+      amount: statusMap["SUCCEEDED"]?.totalAmount ?? 0,
+    },
+    inProgress: {
+      count: statusMap["PENDING"]?.count ?? 0,
+      amount: statusMap["PENDING"]?.totalAmount ?? 0,
+    },
+    failed: {
+      count: statusMap["FAILED"]?.count ?? 0,
+      amount: statusMap["FAILED"]?.totalAmount ?? 0,
+    },
+  };
+};
+
 
 
 export const AnalyticsServices = {
@@ -542,4 +676,7 @@ export const AnalyticsServices = {
   getDeliveryDetailsService,
   getAllDeliveriesDetailsService,
   getDeliveryStatsService,
+  getTransactionDetailsService,
+  getAllTransactionsDetailsService,
+  getTransactionStatsService,
 };

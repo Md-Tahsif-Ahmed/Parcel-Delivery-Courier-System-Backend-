@@ -89,6 +89,38 @@ const getDeliveryStats =catchAsync(async(req ,res)=>{
     });
 });
 
+const getTransactionDetails =catchAsync(async(req ,res)=>{
+    const transactionId = req.params.transactionId;
+    const result = await AnalyticsServices.getTransactionDetailsService(transactionId);
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Transaction details fetched successfully",
+        data: result,
+    });
+});
+
+const getAllTransactionsDetails =catchAsync(async(req ,res)=>{
+    const result = await AnalyticsServices.getAllTransactionsDetailsService(req.query);
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Transaction details fetched successfully",
+        data: result.data,
+        meta: result.meta,
+    });
+});
+
+const getTransactionStats =catchAsync(async(req ,res)=>{
+    const result = await AnalyticsServices.getTransactionStatsService();
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Transaction stats fetched successfully",
+        data: result,
+    });
+});
+
 
 
 export const AnalyticsControllers={
@@ -100,4 +132,7 @@ export const AnalyticsControllers={
     getDeliveryDetails,
     getAllDeliveriesDetails,
     getDeliveryStats,
+    getTransactionDetails,
+    getAllTransactionsDetails,
+    getTransactionStats,
 }
