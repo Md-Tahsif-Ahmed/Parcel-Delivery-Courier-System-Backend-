@@ -131,7 +131,15 @@ const getDashboardStats =catchAsync(async(req ,res)=>{
     });
 });
 
-
+const getMonthlyStats =catchAsync(async(req ,res)=>{
+    const result = await AnalyticsServices.getMonthlyStatsService(req.query);
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Monthly stats fetched successfully",
+        data: result,
+    });
+});
 
 export const AnalyticsControllers={
     getAnalytics,
@@ -146,4 +154,5 @@ export const AnalyticsControllers={
     getAllTransactionsDetails,
     getTransactionStats,
     getDashboardStats,
+    getMonthlyStats,
 }

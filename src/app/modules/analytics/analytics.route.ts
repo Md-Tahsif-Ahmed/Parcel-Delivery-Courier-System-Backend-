@@ -29,6 +29,8 @@ router.get("/transaction-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
 
 router.get("/dashboard-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDashboardStats);
 
+router.get("/monthly-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getMonthlyStats);
+
 
 
 export const AnalyticsRoutes = router;

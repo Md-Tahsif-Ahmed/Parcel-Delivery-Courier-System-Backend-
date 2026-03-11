@@ -510,6 +510,26 @@ const getDriverEarningsFromDB = async (user: JwtPayload) => {
   };
 };
 
+// const updateProfileToDB = async (
+//   user: JwtPayload,
+//   payload: Partial<IUser>,
+// ): Promise<Partial<IUser | null>> => {
+//   const { id } = user;
+//   const isExistUser = await User.isExistUserById(id);
+//   if (!isExistUser) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+//   }
+
+//   if (payload.profileImage && isExistUser.profileImage) {
+//     unlinkFile(isExistUser.profileImage);
+//   }
+
+//   const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
+//     new: true,
+//   });
+//   return updateDoc;
+// };
+
 const updateProfileToDB = async (
   user: JwtPayload,
   payload: Partial<IUser>,
@@ -524,11 +544,40 @@ const updateProfileToDB = async (
     unlinkFile(isExistUser.profileImage);
   }
 
-  const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
-    new: true,
-  });
+  // nested object flatten kore $set e pathao
+  const flatPayload = flattenObject(payload);
+
+  const updateDoc = await User.findOneAndUpdate(
+    { _id: id },
+    { $set: flatPayload },
+    { new: true }
+  );
+
   return updateDoc;
 };
+
+// -------------------- Helper --------------------
+
+const flattenObject = (obj: Record<string, any>, prefix = ""): Record<string, any> => {
+  return Object.keys(obj).reduce((acc, key) => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    const value = obj[key];
+
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    ) {
+      Object.assign(acc, flattenObject(value, fullKey));
+    } else {
+      acc[fullKey] = value;
+    }
+
+    return acc;
+  }, {} as Record<string, any>);
+};
+
 
 const getAllUsersFromDB = async (query: any) => {
   const baseQuery = User.find({

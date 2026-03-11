@@ -105,9 +105,7 @@ const getDriverDetailsService = async (driverId: string) => {
   const driver = await User.findOne({
     _id: driverId,
     role: USER_ROLES.DRIVER,
-  }).select(
-    "firstName lastName fullName email phone profileImage countryCode status driverRegistration.basicInfo.address"
-  );
+  });
 
   if (!driver) throw new Error("Driver not found");
 
@@ -120,14 +118,42 @@ const getDriverDetailsService = async (driverId: string) => {
   return {
     info: {
       id: driver._id,
-      name: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
+      firstName: driver.firstName,
+      lastName: driver.lastName,
+      fullName: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
       email: driver.email,
+      countryCode: driver.countryCode,
       phone: driver.phone,
       profileImage: driver.profileImage,
-      countryCode: driver.countryCode,
       status: driver.status,
-      address: driver.driverRegistration?.basicInfo?.address,
+      createdAt: driver.createdAt,
+
+      basicInfo: {
+        ssn: driver.driverRegistration?.basicInfo?.ssn,
+        dateOfBirth: driver.driverRegistration?.basicInfo?.dateOfBirth,
+        address: driver.driverRegistration?.basicInfo?.address,
+      },
+
+      vehicleInfo: {
+        vehicleType: driver.driverRegistration?.vehicleInfo?.vehicleType,
+        make: driver.driverRegistration?.vehicleInfo?.make,
+        year: driver.driverRegistration?.vehicleInfo?.year,
+        licensePlateNumber: driver.driverRegistration?.vehicleInfo?.licensePlateNumber,
+        color: driver.driverRegistration?.vehicleInfo?.color,
+        vehicleImage: driver.driverRegistration?.vehicleInfo?.vehicleImage,
+      },
+
+      requiredDocs: {
+        vehicleRegistrationDoc: driver.driverRegistration?.requiredDocs?.vehicleRegistrationDoc,
+        stateIdDoc: driver.driverRegistration?.requiredDocs?.stateIdDoc,
+        driversLicenseDoc: driver.driverRegistration?.requiredDocs?.driversLicenseDoc,
+        ssnDoc: driver.driverRegistration?.requiredDocs?.ssnDoc,
+        insuranceDoc: driver.driverRegistration?.requiredDocs?.insuranceDoc,
+      },
+
+      applicationStatus: driver.driverRegistration?.applicationStatus,
     },
+
     stats: {
       totalDeliveries,
       rating: ratingInfo,
@@ -138,22 +164,16 @@ const getDriverDetailsService = async (driverId: string) => {
 
 
 const getAllDriversDetailsService = async (query: Record<string, any>) => {
- const searchableFields = ["fullName", "firstName", "lastName", "email", "phone"];
+  const searchableFields = ["fullName", "firstName", "lastName", "email", "phone"];
 
   const userQuery = new QueryBuilder(
-    User.find({ role: USER_ROLES.DRIVER }), // select() সরিয়ে নিচে দাও
+    User.find({ role: USER_ROLES.DRIVER }),
     query
   )
     .search(searchableFields)
     .filter()
     .sort()
-    .paginate()
-    .fields(); // এখানে fields() call করো
-
-  // fields() এর আগে manually select force করো
-  userQuery.modelQuery = userQuery.modelQuery.select(
-    "firstName lastName fullName email phone profileImage countryCode status driverRegistration.basicInfo.address"
-  );
+    .paginate();
 
   const [drivers, meta] = await Promise.all([
     userQuery.modelQuery,
@@ -163,7 +183,7 @@ const getAllDriversDetailsService = async (query: Record<string, any>) => {
   if (!drivers.length) return { data: [], meta };
 
   const driversWithStats = await Promise.all(
-    drivers.map(async (driver:any) => {
+    drivers.map(async (driver: any) => {
       const driverId = driver._id.toString();
 
       const [ratingInfo, totalDeliveries, earningInfo] = await Promise.all([
@@ -175,14 +195,42 @@ const getAllDriversDetailsService = async (query: Record<string, any>) => {
       return {
         info: {
           id: driver._id,
-          name: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          fullName: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
           email: driver.email,
+          countryCode: driver.countryCode,
           phone: driver.phone,
           profileImage: driver.profileImage,
-          countryCode: driver.countryCode,
           status: driver.status,
-          address: driver.driverRegistration?.basicInfo?.address,
+          createdAt: driver.createdAt,
+
+          basicInfo: {
+            ssn: driver.driverRegistration?.basicInfo?.ssn,
+            dateOfBirth: driver.driverRegistration?.basicInfo?.dateOfBirth,
+            address: driver.driverRegistration?.basicInfo?.address,
+          },
+
+          vehicleInfo: {
+            vehicleType: driver.driverRegistration?.vehicleInfo?.vehicleType,
+            make: driver.driverRegistration?.vehicleInfo?.make,
+            year: driver.driverRegistration?.vehicleInfo?.year,
+            licensePlateNumber: driver.driverRegistration?.vehicleInfo?.licensePlateNumber,
+            color: driver.driverRegistration?.vehicleInfo?.color,
+            vehicleImage: driver.driverRegistration?.vehicleInfo?.vehicleImage,
+          },
+
+          requiredDocs: {
+            vehicleRegistrationDoc: driver.driverRegistration?.requiredDocs?.vehicleRegistrationDoc,
+            stateIdDoc: driver.driverRegistration?.requiredDocs?.stateIdDoc,
+            driversLicenseDoc: driver.driverRegistration?.requiredDocs?.driversLicenseDoc,
+            ssnDoc: driver.driverRegistration?.requiredDocs?.ssnDoc,
+            insuranceDoc: driver.driverRegistration?.requiredDocs?.insuranceDoc,
+          },
+
+          applicationStatus: driver.driverRegistration?.applicationStatus,
         },
+
         stats: {
           totalDeliveries,
           rating: ratingInfo,
@@ -253,7 +301,7 @@ const getCustomerDetailsService = async (customerId: string) => {
     _id: customerId,
     role: USER_ROLES.CUSTOMER,
   }).select(
-    "firstName lastName fullName email phone profileImage countryCode status"
+    "firstName lastName fullName email phone profileImage countryCode status createdAt"
   );
 
   if (!customer) throw new Error("Customer not found");
@@ -267,12 +315,15 @@ const getCustomerDetailsService = async (customerId: string) => {
   return {
     info: {
       id: customer._id,
-      name: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      fullName: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
       email: customer.email,
       phone: customer.phone,
       profileImage: customer.profileImage,
       countryCode: customer.countryCode,
       status: customer.status,
+      createdAt: customer.createdAt,
     },
     stats: {
       totalDeliveries,
@@ -297,7 +348,7 @@ const getAllCustomersDetailsService = async (query: Record<string, any>) => {
     .paginate();
 
   userQuery.modelQuery = userQuery.modelQuery.select(
-    "firstName lastName fullName email phone profileImage countryCode status"
+    "firstName lastName fullName email phone profileImage countryCode status createdAt"
   );
 
   const [customers, meta] = await Promise.all([
@@ -320,12 +371,15 @@ const getAllCustomersDetailsService = async (query: Record<string, any>) => {
       return {
         info: {
           id: customer._id,
-          name: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          fullName: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
           email: customer.email,
           phone: customer.phone,
           profileImage: customer.profileImage,
           countryCode: customer.countryCode,
           status: customer.status,
+          createdAt: customer.createdAt,
         },
         stats: {
           totalDeliveries,
@@ -399,10 +453,20 @@ const formatDelivery = (delivery: any, transaction: any) => {
 
     payment: transaction
       ? {
+          id: transaction._id,
+          deliveryId: transaction.deliveryId,
+          transactionId: transaction.stripePaymentIntentId,
+          stripeChargeId: transaction.stripeChargeId,
           amount: transaction.amount,
           currency: transaction.currency,
           method: transaction.method,
+          commissionAmount: transaction.commissionAmount,
+          commissionRate: transaction.commissionRate,
+          driverReceiptAmount: transaction.driverReceiptAmount,
           status: transaction.status,
+          payoutStatus: transaction.payoutStatus,
+          payoutAt: transaction.payoutAt,
+          createdAt: transaction.createdAt,
         }
       : null,
 
@@ -429,7 +493,7 @@ const getDeliveryDetailsService = async (deliveryId: string) => {
   const transaction = await Transaction.findOne({
     deliveryId: new Types.ObjectId(deliveryId),
     status: "SUCCEEDED",
-  }).select("amount currency method status");
+  })
 
   return formatDelivery(delivery, transaction);
 };
@@ -465,7 +529,7 @@ const getAllDeliveriesDetailsService = async (query: Record<string, any>) => {
       const transaction = await Transaction.findOne({
         deliveryId: delivery._id,
         status: "SUCCEEDED",
-      }).select("amount currency method status");
+      })
 
       return formatDelivery(delivery, transaction);
     })
@@ -540,42 +604,61 @@ const formatTransaction = (transaction: any) => {
   return {
     id: transaction._id,
     deliveryId: transaction.deliveryId,
+
     customer: customer
       ? {
           id: customer._id,
-          name: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          fullName: customer.fullName ?? `${customer.firstName} ${customer.lastName}`,
           email: customer.email,
           phone: customer.phone,
           profileImage: customer.profileImage,
           countryCode: customer.countryCode,
           status: customer.status,
+          createdAt: customer.createdAt,
         }
       : null,
 
     driver: driver
       ? {
           id: driver._id,
-          name: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          fullName: driver.fullName ?? `${driver.firstName} ${driver.lastName}`,
           email: driver.email,
           phone: driver.phone,
           profileImage: driver.profileImage,
           countryCode: driver.countryCode,
           status: driver.status,
+          createdAt: driver.createdAt,
         }
       : null,
 
-    transactionId: transaction.stripePaymentIntentId,
-    date: transaction.createdAt,
-    totalAmount: {
-      amount: transaction.amount,
+    payment: {
+      transactionId: transaction.stripePaymentIntentId,
+      stripeChargeId: transaction.stripeChargeId,
+      stripeSessionId: transaction.stripeSessionId,
+      method: transaction.method,
       currency: transaction.currency,
+      totalAmount: transaction.amount,
+      status: transaction.status,
     },
-    adminAmount: {
-      amount: transaction.commissionAmount,
+
+    commission: {
       commissionRate: transaction.commissionRate,
-      currency: transaction.currency,
+      adminAmount: transaction.commissionAmount,
+      driverAmount: transaction.driverReceiptAmount,
     },
-    status: transaction.status,
+
+    payout: {
+      status: transaction.payoutStatus,
+      stripeTransferId: transaction.stripeTransferId,
+      payoutAt: transaction.payoutAt,
+    },
+
+    date: transaction.createdAt,
+    updatedAt: transaction.updatedAt,
   };
 };
 
@@ -713,6 +796,77 @@ const getDashboardStatsService = async () => {
   };
 };
 
+const getMonthlyStatsService = async (query: Record<string, any>) => {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const year = Number(query.year) || new Date().getFullYear();
+
+  const startDate = new Date(`${year}-01-01T00:00:00.000Z`);
+  const endDate = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+
+  const [revenueStats, deliveryStats] = await Promise.all([
+    Transaction.aggregate([
+      {
+        $match: {
+          status: "SUCCEEDED",
+          createdAt: { $gte: startDate, $lt: endDate },
+        },
+      },
+      {
+        $group: {
+          _id: { month: { $month: "$createdAt" } },
+          totalRevenue: { $sum: "$commissionAmount" },
+          currency: { $first: "$currency" },
+        },
+      },
+    ]),
+
+    Delivery.aggregate([
+      {
+        $match: {
+          status: { $in: [DELIVERY_STATUS.DELIVERED_CONFIRMED, DELIVERY_STATUS.PAYOUT_DONE] },
+          createdAt: { $gte: startDate, $lt: endDate },
+        },
+      },
+      {
+        $group: {
+          _id: { month: { $month: "$createdAt" } },
+          totalDeliveries: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  // revenue map by month index
+  const revenueMap: Record<number, { revenue: number; currency: string }> = {};
+  revenueStats.forEach((s) => {
+    revenueMap[s._id.month] = {
+      revenue: s.totalRevenue,
+      currency: s.currency,
+    };
+  });
+
+  // delivery map by month index
+  const deliveryMap: Record<number, number> = {};
+  deliveryStats.forEach((s) => {
+    deliveryMap[s._id.month] = s.totalDeliveries;
+  });
+
+  // build full 12 months — missing months will have 0
+  const result = monthNames.map((month, index) => {
+    const monthIndex = index + 1;
+    return {
+      month,
+      year,
+      revenue: revenueMap[monthIndex]?.revenue ?? 0,
+      currency: revenueMap[monthIndex]?.currency ?? "usd",
+      deliveries: deliveryMap[monthIndex] ?? 0,
+    };
+  });
+
+  return result;
+};
+
 
 export const AnalyticsServices = {
   getUserStats,
@@ -727,4 +881,5 @@ export const AnalyticsServices = {
   getAllTransactionsDetailsService,
   getTransactionStatsService,
   getDashboardStatsService,
+  getMonthlyStatsService,
 };
