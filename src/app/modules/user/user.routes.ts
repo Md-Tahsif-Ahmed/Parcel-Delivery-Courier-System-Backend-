@@ -253,6 +253,13 @@ router.patch(
   validateRequest(UserValidation.driverAvailabilityZodSchema),
   UserController.updateDriverAvailability,
 );
+
+// status
+router.patch(
+  "/:id/status",
+  requireAdminOrSuperAdmin,
+  UserController.updateStatusById,
+);
  
 /* ---------------------------- DYNAMIC USER ID ROUTES (KEEP LAST!) ------- */
 router

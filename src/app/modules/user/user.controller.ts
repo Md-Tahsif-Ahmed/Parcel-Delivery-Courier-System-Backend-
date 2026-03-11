@@ -468,6 +468,23 @@ const updateDriverAvailability = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+const updateStatusById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const { status } = req.body;
+
+  const result = await UserService.updateStatusByIdToDB(id, status);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Status updated successfully",
+    data: result,
+  });
+});
+
+
 export const UserController = {
   createUser,
   createAdmin,
@@ -479,6 +496,7 @@ export const UserController = {
   getUserById,
   deleteUserById,
   deleteProfile,
+  updateStatusById,
   // driver registration
   getMyDriverRegistration,
   updateDriverBasicInfo,

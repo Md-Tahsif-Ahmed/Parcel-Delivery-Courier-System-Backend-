@@ -1,5 +1,5 @@
 import { Model } from "mongoose";
-import { USER_ROLES } from "../../../enums/user";
+import { STATUS, USER_ROLES } from "../../../enums/user";
 
 export enum MEMBERSHIP_TYPE {
   NONE = "none",
@@ -97,6 +97,7 @@ export type IUser = {
   membershipType?: MEMBERSHIP_TYPE;
   isPremium?: boolean;
   premiumExpiresAt?: Date | null;
+  status?: STATUS;
 
   subscriptionStatus?: SUBSCRIPTION_STATUS;
   currentPlanPrice: number;
