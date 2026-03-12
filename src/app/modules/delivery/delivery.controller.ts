@@ -88,10 +88,7 @@ changeDeliveryInfo: catchAsync(async (req, res) => {
     sendResponse(res, { success: true, statusCode: StatusCodes.OK, message: "Offers list", data: result });
   }),
 
-  bookNow: catchAsync(async (req, res) => {
-    const result = await DeliveryService.bookNowToDB(req.user as JwtPayload, req.body.deliveryId);
-    sendResponse(res, { success: true, statusCode: StatusCodes.OK, message: "Payment initiated", data: result });
-  }),
+ 
 
   startJourney: catchAsync(async (req, res) => {
     const result = await DeliveryService.driverStartJourneyToDB(req.user as JwtPayload, req.params.id);

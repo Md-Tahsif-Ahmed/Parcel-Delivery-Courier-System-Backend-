@@ -45,7 +45,7 @@ router.post("/:id/reply-bid", requireCustomer, validateRequest(DeliveryValidatio
 router.get("/:id/offers", auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER), DeliveryController.offers);
 
 // payment (keep bookNow for now)
-router.post("/book-now", requireCustomer, validateRequest(DeliveryValidation.bookNow), DeliveryController.bookNow);
+ 
 
 // driver
 router.get("/driver/home", requireDriver, DeliveryController.driverHome);

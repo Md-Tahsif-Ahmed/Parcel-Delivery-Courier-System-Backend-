@@ -14,7 +14,8 @@ export type IFolderName =
   | "driversLicenseDoc"
   | "ssnDoc"
   | "insuranceDoc"
-  | "others";
+  | "others"
+  | "attachments";
 
 //single file
 export const getSingleFilePath = (files: any, folderName: IFolderName) => {
@@ -31,7 +32,7 @@ export const getMultipleFilesPath = (files: any, folderName: IFolderName) => {
   const folderFiles = files && files[folderName];
   if (folderFiles) {
     if (Array.isArray(folderFiles)) {
-      return folderFiles.map((file: any) => `/${folderName}/${file.filename}`);
+      return folderFiles.map((file: any) => `/uploads/${folderName}/${file.filename}`);
     }
   }
 

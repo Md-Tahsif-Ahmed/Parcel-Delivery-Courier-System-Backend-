@@ -902,6 +902,76 @@ const notifyUser = async (
   });
 };
 
+const getEligibleNearbyDrivers = async (
+  pickupPoint: { coordinates: [number, number] },
+  vehicleType: string,
+  radiusKm = 8,
+  limit = 100,
+) => {
+  const [lng, lat] = pickupPoint.coordinates;
+
+  const drivers = await User.aggregate([
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "distanceMeters",
+        spherical: true,
+        maxDistance: radiusKm * 1000,
+        query: {
+          role: USER_ROLES.DRIVER,
+          "driverStatus.isOnline": true,
+          "driverStatus.isAvailable": true,
+          "driverRegistration.vehicleInfo.vehicleType": vehicleType,
+          "driverStatus.location": { $exists: true },
+          "driverStatus.location.coordinates": { $exists: true, $type: "array" },
+        },
+      },
+    },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+      },
+    },
+  ]);
+
+  return drivers.map((driver) => String(driver._id));
+};
+
+const getInterestedDriverIds = async (deliveryId: string) => {
+  const [acceptances, offers] = await Promise.all([
+    DeliveryAcceptance.find({
+      deliveryId,
+      status: ACCEPTANCE_STATUS.ACCEPTED,
+    })
+      .select("driverId")
+      .lean(),
+    DeliveryOffer.find({
+      deliveryId,
+      status: OFFER_STATUS.PENDING,
+    })
+      .select("driverId")
+      .lean(),
+  ]);
+
+  return Array.from(
+    new Set([
+      ...acceptances.map((item) => String(item.driverId)),
+      ...offers.map((item) => String(item.driverId)),
+    ]),
+  );
+};
+
+const emitToDrivers = (
+  driverIds: string[],
+  event: string,
+  payload: Record<string, unknown>,
+) => {
+  for (const driverId of driverIds) {
+    emitToUser(driverId, event, payload);
+  }
+};
+
 export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
   if (user.role !== USER_ROLES.CUSTOMER) {
     throw new ApiError(
@@ -942,6 +1012,25 @@ export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
     customerId: String(doc.customerId),
   });
 
+  const nearbyDriverIds = await getEligibleNearbyDrivers(
+    doc.pickup.point as any,
+    doc.vehicleType,
+  );
+
+  emitToDrivers(nearbyDriverIds, "driver:home:new-delivery", {
+    deliveryId: String(doc._id),
+    customerId: String(doc.customerId),
+    vehicleType: doc.vehicleType,
+    pickup: doc.pickup,
+    dropoff: doc.dropoff,
+    receiver: doc.receiver,
+    parcel: doc.parcel,
+    pricing: doc.pricing,
+    customerOfferFare: doc.customerOfferFare,
+    status: doc.status,
+    createdAt: doc.createdAt,
+  });
+
   return doc;
 };
 
@@ -972,6 +1061,8 @@ export const cancelDeliveryToDB = async (
     );
   }
 
+  const interestedDriverIds = await getInterestedDriverIds(String(delivery._id));
+
   delivery.status = DELIVERY_STATUS.CANCELLED;
   await delivery.save();
 
@@ -982,6 +1073,20 @@ export const cancelDeliveryToDB = async (
     status: delivery.status,
     cancelledBy: user.id,
   });
+
+  emitToDrivers(interestedDriverIds, "driver:home:delivery-removed", {
+    deliveryId: String(delivery._id),
+    reason: "CUSTOMER_CANCELLED",
+    status: delivery.status,
+  });
+
+  if (delivery.selectedDriverId) {
+    emitToUser(String(delivery.selectedDriverId), "delivery:cancelled", {
+      deliveryId: String(delivery._id),
+      status: delivery.status,
+      cancelledBy: user.id,
+    });
+  }
 
   return delivery;
 };
@@ -1013,6 +1118,8 @@ export const changeDeliveryInfoToDB = async (
       "Only OPEN delivery can be changed",
     );
   }
+
+  const oldInterestedDriverIds = await getInterestedDriverIds(String(delivery._id));
 
   const nextVehicleType = payload.vehicleType ?? delivery.vehicleType;
 
@@ -1070,7 +1177,6 @@ export const changeDeliveryInfoToDB = async (
   delivery.parcel = nextParcel as any;
   delivery.customerOfferFare = nextCustomerOfferFare;
   delivery.pricing = estimate as any;
-
   delivery.selectedDriverId = null;
   delivery.acceptedOfferId = null;
   delivery.status = DELIVERY_STATUS.OPEN;
@@ -1083,6 +1189,32 @@ export const changeDeliveryInfoToDB = async (
   emitDeliveryEvent(String(delivery._id), "delivery:changed", {
     status: delivery.status,
     customerId: user.id,
+  });
+
+  emitToDrivers(oldInterestedDriverIds, "driver:home:delivery-removed", {
+    deliveryId: String(delivery._id),
+    reason: "DELIVERY_CHANGED",
+    status: delivery.status,
+  });
+
+  const newNearbyDriverIds = await getEligibleNearbyDrivers(
+    delivery.pickup.point as any,
+    delivery.vehicleType,
+  );
+
+  emitToDrivers(newNearbyDriverIds, "driver:home:new-delivery", {
+    deliveryId: String(delivery._id),
+    customerId: String(delivery.customerId),
+    vehicleType: delivery.vehicleType,
+    pickup: delivery.pickup,
+    dropoff: delivery.dropoff,
+    receiver: delivery.receiver,
+    parcel: delivery.parcel,
+    pricing: delivery.pricing,
+    customerOfferFare: delivery.customerOfferFare,
+    status: delivery.status,
+    createdAt: delivery.createdAt,
+    updatedAt: delivery.updatedAt,
   });
 
   return delivery;
@@ -1124,6 +1256,8 @@ export const getDriverMatchesToDB = async (
           "driverStatus.isOnline": true,
           "driverStatus.isAvailable": true,
           "driverRegistration.vehicleInfo.vehicleType": delivery.vehicleType,
+          "driverStatus.location": { $exists: true },
+          "driverStatus.location.coordinates": { $exists: true, $type: "array" },
         },
       },
     },
@@ -1290,6 +1424,8 @@ export const customerSelectDriverToDB = async (
     );
   }
 
+  const allInterestedDriverIds = await getInterestedDriverIds(deliveryId);
+
   const [accepted, offered] = await Promise.all([
     DeliveryAcceptance.findOne({
       deliveryId,
@@ -1327,6 +1463,14 @@ export const customerSelectDriverToDB = async (
     deliveryId: String(updated._id),
     driverId,
     customerId: user.id,
+    status: updated.status,
+  });
+
+  const otherDriverIds = allInterestedDriverIds.filter((id) => id !== driverId);
+
+  emitToDrivers(otherDriverIds, "driver:home:job-taken", {
+    deliveryId: String(updated._id),
+    selectedDriverId: driverId,
     status: updated.status,
   });
 
@@ -1425,6 +1569,8 @@ export const customerAcceptOfferToDB = async (
   if (delivery.customerId.toString() !== user.id)
     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
 
+  const allInterestedDriverIds = await getInterestedDriverIds(deliveryId);
+
   const offer = await DeliveryOffer.findById(offerId);
   if (!offer || offer.deliveryId.toString() !== deliveryId) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Offer not found");
@@ -1458,6 +1604,16 @@ export const customerAcceptOfferToDB = async (
     offerId: String(offer._id),
   });
 
+  const otherDriverIds = allInterestedDriverIds.filter(
+    (id) => id !== String(offer.driverId),
+  );
+
+  emitToDrivers(otherDriverIds, "driver:home:job-taken", {
+    deliveryId: String(delivery._id),
+    selectedDriverId: String(offer.driverId),
+    status: delivery.status,
+  });
+
   await notifyUser(
     String(offer.driverId),
     "Your offer has been accepted.",
@@ -1468,67 +1624,7 @@ export const customerAcceptOfferToDB = async (
   return { delivery, offer };
 };
 
-export const bookNowToDB = async (user: JwtPayload, deliveryId: string) => {
-  if (user.role !== USER_ROLES.CUSTOMER)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-
-  const delivery = await Delivery.findById(deliveryId);
-  if (!delivery)
-    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-  if (delivery.customerId.toString() !== user.id)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-  if (delivery.status !== DELIVERY_STATUS.ACCEPTED) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Delivery is not accepted yet");
-  }
-
-  let amountUsd = delivery.customerOfferFare;
-  if (delivery.acceptedOfferId) {
-    const offer = await DeliveryOffer.findById(delivery.acceptedOfferId);
-    if (offer) amountUsd = offer.offeredFare;
-  }
-
-  const currency = delivery.pricing?.currency ?? "usd";
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amountUsd * 100),
-    currency,
-    metadata: {
-      deliveryId: delivery._id.toString(),
-      customerId: delivery.customerId.toString(),
-      selectedDriverId: delivery.selectedDriverId?.toString() ?? "",
-    },
-    automatic_payment_methods: { enabled: true },
-  });
-
-  delivery.status = DELIVERY_STATUS.PAYMENT_PENDING;
-  delivery.payment = {
-    intentId: paymentIntent.id,
-    status: "PENDING",
-    paidAt: null,
-  };
-  await delivery.save();
-
-  emitDeliveryEvent(String(delivery._id), "delivery:payment-pending", {
-    status: delivery.status,
-    driverId: delivery.selectedDriverId?.toString() ?? null,
-  });
-
-  if (delivery.selectedDriverId) {
-    await notifyUser(
-      String(delivery.selectedDriverId),
-      "Customer started payment for the delivery.",
-      String(delivery._id),
-      { status: delivery.status },
-    );
-  }
-
-  return {
-    clientSecret: paymentIntent.client_secret,
-    intentId: paymentIntent.id,
-    delivery,
-  };
-};
+ 
 
 export const driverStartJourneyToDB = async (
   user: JwtPayload,
@@ -2229,7 +2325,10 @@ export const driverCancelDeliveryToDB = async (
     throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
   }
 
-  if (!delivery.selectedDriverId || delivery.selectedDriverId.toString() !== user.id) {
+  if (
+    !delivery.selectedDriverId ||
+    delivery.selectedDriverId.toString() !== user.id
+  ) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Not assigned to you");
   }
 
@@ -2247,8 +2346,31 @@ export const driverCancelDeliveryToDB = async (
   }
 
   delivery.status = DELIVERY_STATUS.CANCELLED_BY_DRIVER;
-
   await delivery.save();
+
+  emitDeliveryEvent(String(delivery._id), "delivery:driver-cancelled", {
+    deliveryId: String(delivery._id),
+    driverId: user.id,
+    customerId: String(delivery.customerId),
+    status: delivery.status,
+  });
+
+  emitToUser(String(delivery.customerId), "delivery:driver-cancelled", {
+    deliveryId: String(delivery._id),
+    driverId: user.id,
+    customerId: String(delivery.customerId),
+    status: delivery.status,
+  });
+
+  await notifyUser(
+    String(delivery.customerId),
+    "Driver cancelled the delivery.",
+    String(delivery._id),
+    {
+      driverId: user.id,
+      status: delivery.status,
+    },
+  );
 
   return delivery;
 };

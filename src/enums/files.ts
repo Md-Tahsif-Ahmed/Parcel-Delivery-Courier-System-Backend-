@@ -3,7 +3,7 @@ export enum FOLDER_NAMES {
   SEATING_VIEW = "seatingView",
   PROFILE_IMAGE = "profileImage",
   THUMBNAIL = "thumbnail",
-  // Driver registration
+  ATTACHMENTS = "attachments",
   VEHICLE_IMAGE = "vehicleImage",
   VEHICLE_REGISTRATION_DOC = "vehicleRegistrationDoc",
   STATE_ID_DOC = "stateIdDoc",
@@ -13,4 +13,3 @@ export enum FOLDER_NAMES {
   OTHERS = "others",
   REMOVE_IMAGE = "removeImage",
 }
- 
