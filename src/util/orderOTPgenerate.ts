@@ -1,4 +1,6 @@
-import { CounterModel } from "../app/modules/order/counter.model";
+import { CounterModel } from "../app/modules/delivery/counter.model";
+
+ 
 
 const getNextOrderCode = async () => {
   const counter = await CounterModel.findOneAndUpdate(

@@ -2,6 +2,7 @@ export type IFolderName =
   | "image"
   | "seatingView"
   | "profileImage"
+  | "parcelPhotos"
   | "logo"
   | "audio"
   | "video"

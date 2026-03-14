@@ -9,4 +9,6 @@ export type IDeliveryAcceptance = {
   deliveryId: Types.ObjectId;
   driverId: Types.ObjectId;
   status: ACCEPTANCE_STATUS;
+  createdAt?: Date;
+  updatedAt?: Date;
 };

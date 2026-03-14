@@ -32,6 +32,9 @@ const fileUploadHandler = () => {
         case "profileImage":
           uploadDir = path.join(baseUploadDir, "profileImage");
           break;
+        case "parcelPhotos":
+          uploadDir = path.join(baseUploadDir, "parcelPhotos");
+          break;
         case "thumbnail":
           uploadDir = path.join(baseUploadDir, "thumbnail");
           break;
@@ -104,7 +107,11 @@ const fileUploadHandler = () => {
     "application/octet-stream",
   ];
 
-  const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+  const fileFilter = (
+    req: Request,
+    file: Express.Multer.File,
+    cb: FileFilterCallback,
+  ) => {
     if (
       [
         "image",
@@ -115,6 +122,7 @@ const fileUploadHandler = () => {
         "logo",
         "banner",
         "cover",
+        "parcelPhotos",
       ].includes(file.fieldname)
     ) {
       if (imageMimeTypes.includes(file.mimetype)) {
@@ -257,6 +265,7 @@ const fileUploadHandler = () => {
   }).fields([
     { name: "image", maxCount: 1 },
     { name: "profileImage", maxCount: 1 },
+    { name: "parcelPhotos", maxCount: 10 },
     { name: "seatingView", maxCount: 10 },
     { name: "nidFrontPic", maxCount: 1 },
     { name: "thumbnail", maxCount: 5 },
