@@ -56,7 +56,9 @@ const createCallSession = async (callerId: string, receiverId: string) => {
         ],
     });
 
-    if (active) throw new Error("Caller or receiver is already in another active call");
+    if (active) {
+        throw new ApiError(400, "Caller or receiver is already in another active call");
+    }
 
     const sessionId = new Types.ObjectId();
     const channelName = `call_${sessionId}`;
@@ -83,12 +85,18 @@ const createCallSession = async (callerId: string, receiverId: string) => {
     setTimeout(async () => {
         const latest = await CallSession.findById(session._id);
         if (latest && latest.status === CALL_STATUS.RINGING) {
-            latest.status = CALL_STATUS.REJECTED;
+            latest.status = CALL_STATUS.MISSED;
             latest.endedAt = new Date();
             await latest.save();
-            const rejectedByUser = await getUserInfo(callerId);
-            emitToUser(callerId, "call_rejected", { sessionId: latest._id.toString(), reason: "No answer", rejectedBy: rejectedByUser });
-            emitToUser(receiverId, "call_missed", { sessionId: latest._id.toString(), missedBy: rejectedByUser });
+
+            const payload = {
+                sessionId: latest._id.toString(),
+                reason: "No answer",
+                user: callerInfo,
+            };
+
+            emitToUser(callerId, "call_missed", payload);
+            emitToUser(receiverId, "call_missed", payload);
         }
     }, MAX_RINGING_TIME);
 
@@ -99,35 +107,41 @@ const createCallSession = async (callerId: string, receiverId: string) => {
 // ACCEPT CALL
 // --------------------------------------------------
 const acceptCallSession = async (sessionId: string, userId: string) => {
-    const session = await CallSession.findById(sessionId);
-    if (!session) throw new Error("Call session not found");
-    if (session.status !== CALL_STATUS.RINGING) throw new Error("Call no longer ringing");
-    if (session.receiver.toString() !== userId) throw new Error("Not your call");
+    const session = await CallSession.findById(sessionId).populate("caller receiver", "firstName lastName profileImage phone");
+    
+    if (!session) {
+        throw new ApiError(404, "Call session not found");
+    }
+    if (session.status !== CALL_STATUS.RINGING) {
+        throw new ApiError(400, "Call no longer ringing");
+    }
+    if (session.receiver._id.toString() !== userId) {
+        throw new ApiError(403, "Not your call");
+    }
 
     session.status = CALL_STATUS.ONGOING;
     session.startedAt = new Date();
     await session.save();
 
-    const callerUid = stringToNumericUid(session.caller.toString());
-    const receiverUid = stringToNumericUid(session.receiver.toString());
+    const callerUid = stringToNumericUid(session.caller._id.toString());
+    const receiverUid = stringToNumericUid(session.receiver._id.toString());
 
-    const callerInfo = await getUserInfo(session.caller.toString());
-    const receiverInfo = await getUserInfo(session.receiver.toString());
-
-    const data = {
+    const commonData = {
+        sessionId,
         channelName: session.channelName,
-        callerToken: generateToken(session.channelName, callerUid),
-        receiverToken: generateToken(session.channelName, receiverUid),
         callerUid,
         receiverUid,
-        caller: callerInfo,
-        receiver: receiverInfo,
+        caller: session.caller,
+        receiver: session.receiver,
     };
 
-    emitToUser(session.caller.toString(), "call_accepted", { sessionId, ...data });
-    emitToUser(session.receiver.toString(), "call_accepted", { sessionId, ...data });
+    const callerToken = generateToken(session.channelName, callerUid);
+    const receiverToken = generateToken(session.channelName, receiverUid);
 
-    return data;
+    emitToUser(session.caller._id.toString(), "call_accepted", { ...commonData, token: callerToken });
+    emitToUser(session.receiver._id.toString(), "call_accepted", { ...commonData, token: receiverToken });
+
+    return { ...commonData, callerToken, receiverToken };
 }
 
 // --------------------------------------------------
@@ -141,10 +155,11 @@ const rejectCallSession = async (sessionId: string, userId: string) => {
     session.endedAt = new Date();
     await session.save();
 
-    const user= await getUserInfo(userId);
+    const user = await getUserInfo(userId);
 
-    emitToUser(session.caller.toString(), "call_rejected", { sessionId, user });
-    emitToUser(session.receiver.toString(), "call_rejected", { sessionId, user });
+    const payload = { sessionId, user };
+    emitToUser(session.caller.toString(), "call_rejected", payload);
+    emitToUser(session.receiver.toString(), "call_rejected", payload);
 }
 
 // --------------------------------------------------
@@ -158,10 +173,11 @@ const endCallSession = async (sessionId: string, endedBy?: string) => {
     session.endedAt = new Date();
     await session.save();
 
-    const endedByUser = await getUserInfo(endedBy || "");
+    const endedByUser = endedBy ? await getUserInfo(endedBy) : null;
 
-    emitToUser(session.caller.toString(), "call_ended", { sessionId, endedBy: endedByUser });
-    emitToUser(session.receiver.toString(), "call_ended", { sessionId, endedBy: endedByUser });
+    const payload = { sessionId, endedBy: endedByUser };
+    emitToUser(session.caller.toString(), "call_ended", payload);
+    emitToUser(session.receiver.toString(), "call_ended", payload);
 }
 
 // --------------------------------------------------
