@@ -7,4 +7,30 @@ const router = express.Router();
 
 router.get("/user-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAnalytics);
 
+router.get("/all-drivers-details", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAllDriversDetails);
+
+router.get("/driver-details/:driverId", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDriverDetails);
+
+router.get("/all-customers-details", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAllCustomersDetails);
+
+router.get("/customer-details/:customerId", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getCustomerDetails);
+
+router.get("/all-deliveries-details", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAllDeliveriesDetails);
+
+router.get("/delivery-details/:deliveryId", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDeliveryDetails);
+
+router.get("/delivery-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDeliveryStats);
+
+router.get("/all-transactions-details", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getAllTransactionsDetails);
+
+router.get("/transaction-details/:transactionId", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getTransactionDetails);
+
+router.get("/transaction-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getTransactionStats);
+
+router.get("/dashboard-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getDashboardStats);
+
+router.get("/monthly-stats", auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), AnalyticsControllers.getMonthlyStats);
+
+
+
 export const AnalyticsRoutes = router;

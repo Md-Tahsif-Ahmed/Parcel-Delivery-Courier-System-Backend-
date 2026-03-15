@@ -55,11 +55,10 @@ class QueryBuilder<T> {
   
   filter() {
   const queryObj = { ...this.query };
-  const exclude = ["search", "page", "limit", "sort", "fields", "type"];
+  const exclude = ["searchTerm", "search", "page", "limit", "sort", "fields", "type"];
 
   exclude.forEach((key) => delete queryObj[key]);
 
-  // ✅ support comma-separated status filter: status=OPEN,REQUESTED
   if (typeof queryObj.status === "string" && queryObj.status.includes(",")) {
     queryObj.status = { $in: queryObj.status.split(",").map((s: string) => s.trim()) };
   }

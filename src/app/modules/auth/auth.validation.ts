@@ -34,8 +34,29 @@ const createLoginZodSchema = z.object({
 
 
 const createForgetPasswordZodSchema = z.object({
+  body: z
+    .object({
+      email: z.string().optional(),
+      phone: z.string().optional(),
+      countryCode: z.string().optional(),
+    })
+    .refine((data) => data.email || (data.phone && data.countryCode), {
+      message: "Either email or (phone and countryCode) is required",
+    }),
+});
+
+const createRequestLoginOTPZodSchema = z.object({
   body: z.object({
-    email: z.string({ required_error: "Email is required" }),
+    phone: z.string({ required_error: "Phone number is required" }),
+    countryCode: z.string({ required_error: "Country code is required" }),
+  }),
+});
+
+const createVerifyLoginOTPZodSchema = z.object({
+  body: z.object({
+    phone: z.string({ required_error: "Phone number is required" }),
+    code: z.string({ required_error: "OTP code is required" }),
+    countryCode: z.string({ required_error: "Country code is required" }),
   }),
 });
 
@@ -67,4 +88,6 @@ export const AuthValidation = {
   createLoginZodSchema,
   createResetPasswordZodSchema,
   createChangePasswordZodSchema,
+  createRequestLoginOTPZodSchema,
+  createVerifyLoginOTPZodSchema,
 };

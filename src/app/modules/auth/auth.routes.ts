@@ -23,6 +23,17 @@ router.post(
   AuthController.forgetPassword,
 );
 
+router.post(
+  "/request-login-otp",
+  validateRequest(AuthValidation.createRequestLoginOTPZodSchema),
+  AuthController.requestLoginOTP,
+);
+router.post(
+  "/verify-login-otp",
+  // validateRequest(AuthValidation.createVerifyLoginOTPZodSchema),
+  AuthController.verifyLoginOTP,
+);
+
 router.post("/refresh-token", AuthController.newAccessToken);
 
 router.post("/resend-otp", AuthController.resendVerificationEmail);
@@ -77,7 +88,7 @@ router.post(
 
 router.post(
   "/change-password",
-  auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER),
+  auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER,USER_ROLES.SUPER_ADMIN),
   validateRequest(AuthValidation.createChangePasswordZodSchema),
   AuthController.changePassword,
 );

@@ -1,4 +1,4 @@
-import { USER_ROLES } from "../../../enums/user";
+import { STATUS, USER_ROLES } from "../../../enums/user";
 import { IUser, DRIVER_APPLICATION_STATUS } from "./user.interface";
 import { JwtPayload } from "jsonwebtoken";
 import { User } from "./user.model";
@@ -511,6 +511,26 @@ const getDriverEarningsFromDB = async (user: JwtPayload) => {
   };
 };
 
+// const updateProfileToDB = async (
+//   user: JwtPayload,
+//   payload: Partial<IUser>,
+// ): Promise<Partial<IUser | null>> => {
+//   const { id } = user;
+//   const isExistUser = await User.isExistUserById(id);
+//   if (!isExistUser) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+//   }
+
+//   if (payload.profileImage && isExistUser.profileImage) {
+//     unlinkFile(isExistUser.profileImage);
+//   }
+
+//   const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
+//     new: true,
+//   });
+//   return updateDoc;
+// };
+
 const updateProfileToDB = async (
   user: JwtPayload,
   payload: Partial<IUser>,
@@ -525,11 +545,40 @@ const updateProfileToDB = async (
     unlinkFile(isExistUser.profileImage);
   }
 
-  const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
-    new: true,
-  });
+  // nested object flatten kore $set e pathao
+  const flatPayload = flattenObject(payload);
+
+  const updateDoc = await User.findOneAndUpdate(
+    { _id: id },
+    { $set: flatPayload },
+    { new: true }
+  );
+
   return updateDoc;
 };
+
+// -------------------- Helper --------------------
+
+const flattenObject = (obj: Record<string, any>, prefix = ""): Record<string, any> => {
+  return Object.keys(obj).reduce((acc, key) => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    const value = obj[key];
+
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    ) {
+      Object.assign(acc, flattenObject(value, fullKey));
+    } else {
+      acc[fullKey] = value;
+    }
+
+    return acc;
+  }, {} as Record<string, any>);
+};
+
 
 const getAllUsersFromDB = async (query: any) => {
   const baseQuery = User.find({
@@ -1020,6 +1069,30 @@ const updateDriverAvailabilityToDB = async (
   return updated;
 };
 
+const updateStatusByIdToDB = async (
+  id: string,
+  status: STATUS.ACTIVE | STATUS.INACTIVE,
+) => {
+  if (![STATUS.ACTIVE, STATUS.INACTIVE].includes(status)) {
+    throw new ApiError(400, "Status must be either 'ACTIVE' or 'INACTIVE'");
+  }
+
+  const user = await User.findOne({
+    _id: id,
+    role: {$in: [USER_ROLES.CUSTOMER, USER_ROLES.DRIVER]},
+  });
+  if (!user) {
+    throw new ApiError(404, "No user is found by this user ID");
+  }
+
+  const result = await User.findByIdAndUpdate(id, { status }, { new: true });
+  if (!result) {
+    throw new ApiError(400, "Failed to change status by this user ID");
+  }
+
+  return result;
+};
+
 export const UserService = {
   createUserToDB,
   getAdminFromDB,
@@ -1031,7 +1104,7 @@ export const UserService = {
   getUserByIdFromDB,
   deleteUserByIdFromD,
   deleteProfileFromDB,
-
+  updateStatusByIdToDB,
   getMyDriverRegistrationFromDB,
   updateDriverBasicInfoToDB,
   updateDriverVehicleInfoToDB,

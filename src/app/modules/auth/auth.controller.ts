@@ -55,8 +55,12 @@ const verifyPhone = catchAsync(async (req, res) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Phone verified successfully",
-    data: result,
+    message: result.message,
+    data: {
+      token: (result as any).token ?? null,
+      resetToken: (result as any).resetToken ?? null,
+      user: (result as any).user ?? null,
+    },
   });
 });
 
@@ -74,13 +78,39 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 const forgetPassword = catchAsync(async (req: Request, res: Response) => {
-  const email = req.body.email;
-  const result = await AuthService.forgetPasswordToDB(email);
+  const { email, phone, countryCode } = req.body;
+  const identifier = email || phone;
+  const result = await AuthService.forgetPasswordToDB(identifier, countryCode);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Please check your email, we send a OTP!",
+    message: "Please check your email or phone, we send a OTP!",
+    data: result,
+  });
+});
+
+const requestLoginOTP = catchAsync(async (req, res) => {
+  const { phone, countryCode } = req.body;
+  const result = await AuthService.requestLoginOTP(phone, countryCode);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "OTP sent to your phone number",
+    data: result,
+  });
+});
+
+const verifyLoginOTP = catchAsync(async (req, res) => {
+  const result = await AuthService.verifyLoginOTP(req.body);
+  console.log("Verify Login OTP Result:", result);
+  console.log(req.body,"BODY")
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Login successful",
     data: result,
   });
 });
@@ -136,21 +166,6 @@ const resendVerificationEmail = catchAsync(
   },
 );
 
-// delete user
-// const deleteUser = catchAsync(async (req: Request, res: Response) => {
-//   const result = await AuthService.deleteUserFromDB(
-//     req.user as JwtPayload,
-//     req.body.password,
-//   );
-
-//   sendResponse(res, {
-//     success: true,
-//     statusCode: StatusCodes.OK,
-//     message: "Account Deleted successfully",
-//     data: result,
-//   });
-// });
-
 export const AuthController = {
   googleLogin,
   verifyEmail,
@@ -161,5 +176,6 @@ export const AuthController = {
   changePassword,
   newAccessToken,
   resendVerificationEmail,
-  // deleteUser,
+  requestLoginOTP,
+  verifyLoginOTP,
 };
