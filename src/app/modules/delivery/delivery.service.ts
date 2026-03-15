@@ -2139,7 +2139,30 @@ export const getMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
 };
  
 
-export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
+// export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
+//   if (user.role !== USER_ROLES.DRIVER) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
+//   }
+
+//   const baseQuery = Delivery.find({ selectedDriverId: user.id })
+//     .populate("customerId", "firstName lastName profileImage phone")
+//     .populate("selectedDriverId", "firstName lastName profileImage driverStatus");
+
+//   const qb = new QueryBuilder(baseQuery, query)
+//     .filter()
+//     .sort()
+//     .paginate()
+//     .fields();
+
+//   const meta = await qb.countTotal();
+//   const data = await qb.modelQuery.lean();
+
+//   return { meta, data };
+// };
+export const getDriverMyDeliveriesToDB = async (
+  user: JwtPayload,
+  query: any
+) => {
   if (user.role !== USER_ROLES.DRIVER) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
   }
@@ -2155,11 +2178,32 @@ export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) =>
     .fields();
 
   const meta = await qb.countTotal();
-  const data = await qb.modelQuery.lean();
+  const deliveries = await qb.modelQuery.lean();
+
+  const data = deliveries.map((delivery: any) => {
+    const customer = delivery.customerId;
+
+    const customerName = customer
+      ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim()
+      : null;
+
+    return {
+      ...delivery,
+      customer: customer
+        ? {
+            _id: customer._id,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            fullName: customerName,
+          }
+        : null,
+      customerName,
+      customerId: undefined, // optional remove
+    };
+  });
 
   return { meta, data };
 };
-
 
 
 
