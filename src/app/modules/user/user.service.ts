@@ -19,6 +19,7 @@ import {
 import { Types } from "mongoose";
 import { Delivery } from "../delivery/delivery.model";
 import { DELIVERY_STATUS } from "../delivery/delivery.interface";
+import * as bcrypt from "bcrypt";
 
 // ---------------- Driver helpers ----------------
 const assertDriverCapability = async (id: string) => {
@@ -581,19 +582,42 @@ const deleteUserByIdFromD = async (id: string) => {
   return result;
 };
 
-const deleteProfileFromDB = async (id: string) => {
-  const isExistUser = await User.isExistUserById(id);
-  if (!isExistUser) {
+// const deleteProfileFromDB = async (id: string) => {
+//   const isExistUser = await User.isExistUserById(id);
+//   if (!isExistUser) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+//   }
+
+//   const result = await User.findByIdAndDelete(id);
+
+//   if (!result) {
+//     throw new ApiError(400, "Failed to delete this user");
+//   }
+//   return result;
+// };
+
+const deleteProfileFromDB = async (id: string, password: string) => {
+  // user exists?
+  const user = await User.findById(id).select("+password");
+  if (!user) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
-  const result = await User.findByIdAndDelete(id);
+  // check password
+  const isPasswordMatch = await bcrypt.compare(password, user.password!);
+  if (!isPasswordMatch) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Password is incorrect!");
+  }
 
+  // delete user
+  const result = await User.findByIdAndDelete(id);
   if (!result) {
     throw new ApiError(400, "Failed to delete this user");
   }
+
   return result;
 };
+ 
 
 // ============================ Driver Registration ============================
 

@@ -128,4 +128,6 @@ export type IDeliveryOffer = {
   note?: string;
   customerCounterFare?: number | null; // ✅ NEW
   status: OFFER_STATUS;
+  createdAt?: Date;
+  updatedAt?: Date;
 };

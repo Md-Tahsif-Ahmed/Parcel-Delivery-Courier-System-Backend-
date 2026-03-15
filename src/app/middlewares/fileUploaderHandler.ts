@@ -6,23 +6,22 @@ import path from "path";
 import ApiError from "../../errors/ApiErrors";
 
 const fileUploadHandler = () => {
-  // Create upload folder
   const baseUploadDir = path.join(process.cwd(), "uploads");
+
   if (!fs.existsSync(baseUploadDir)) {
-    fs.mkdirSync(baseUploadDir);
+    fs.mkdirSync(baseUploadDir, { recursive: true });
   }
 
-  // Folder create for different file types
   const createDir = (dirPath: string) => {
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath);
+      fs.mkdirSync(dirPath, { recursive: true });
     }
   };
 
-  // Create filename
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      let uploadDir;
+      let uploadDir: string;
+
       switch (file.fieldname) {
         case "image":
           uploadDir = path.join(baseUploadDir, "image");
@@ -33,10 +32,12 @@ const fileUploadHandler = () => {
         case "profileImage":
           uploadDir = path.join(baseUploadDir, "profileImage");
           break;
+        case "parcelPhotos":
+          uploadDir = path.join(baseUploadDir, "parcelPhotos");
+          break;
         case "thumbnail":
           uploadDir = path.join(baseUploadDir, "thumbnail");
           break;
-        // ---------------- Driver registration ----------------
         case "vehicleImage":
           uploadDir = path.join(baseUploadDir, "vehicleImage");
           break;
@@ -64,178 +65,210 @@ const fileUploadHandler = () => {
         case "video":
           uploadDir = path.join(baseUploadDir, "video");
           break;
+        case "attachments":
+          uploadDir = path.join(baseUploadDir, "attachments");
+          break;
         default:
           uploadDir = path.join(baseUploadDir, "others");
       }
+
       createDir(uploadDir);
       cb(null, uploadDir);
     },
 
     filename: (req, file, cb) => {
       const fileExt = path.extname(file.originalname);
-      const fileName =
-        file.originalname
-          .replace(fileExt, "")
-          .toLowerCase()
-          .split(" ")
-          .join("-") +
-        "-" +
-        Date.now();
-      cb(null, fileName + fileExt);
+      const baseName = path
+        .basename(file.originalname, fileExt)
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-_]/g, "");
+
+      cb(null, `${baseName}-${Date.now()}${fileExt}`);
     },
   });
 
-  // File filter
-  const filterFilter = (req: Request, file: any, cb: FileFilterCallback) => {
+  const imageMimeTypes = [
+    "image/png",
+    "image/jpg",
+    "image/jpeg",
+    "image/svg+xml",
+    "image/webp",
+    "application/octet-stream",
+  ];
+
+  const attachmentMimeTypes = [
+    "image/png",
+    "image/jpg",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+    "application/pdf",
+    "application/octet-stream",
+  ];
+
+  const fileFilter = (
+    req: Request,
+    file: Express.Multer.File,
+    cb: FileFilterCallback,
+  ) => {
     if (
-      file.fieldname === "image" ||
-      file.fieldname === "profileImage" ||
-      file.fieldname === "seatingView" ||
-      file.fieldname === "thumbnail" || // Added the 'thumbnail' field here
-      file.fieldname === "vehicleImage" ||
-      file.fieldname === "logo" ||
-      file.fieldname === "banner" ||
-      file.fieldname === "cover"
-   
+      [
+        "image",
+        "profileImage",
+        "seatingView",
+        "thumbnail",
+        "vehicleImage",
+        "logo",
+        "banner",
+        "cover",
+        "parcelPhotos",
+      ].includes(file.fieldname)
     ) {
-      if (
-        file.mimetype === "images/png" ||
-        file.mimetype === "images/jpg" ||
-        file.mimetype === "images/jpeg" ||
-        file.mimetype === "images/svg" ||
-        file.mimetype === "images/webp" ||
-        file.mimetype === "image/png" ||
-        file.mimetype === "image/jpg" ||
-        file.mimetype === "image/jpeg" ||
-        file.mimetype === "image/svg" ||
-        file.mimetype === "image/webp" ||
-        file.mimetype === "application/octet-stream" ||
-        file.mimetype === "image/svg+xml"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only .jpeg, .png, .jpg .svg .webp .octet-stream .svg+xml file supported",
-          ),
-        );
+      if (imageMimeTypes.includes(file.mimetype)) {
+        return cb(null, true);
       }
-    } else if (
-      // Driver docs (PDF only, but image also allow)
-      file.fieldname === "vehicleRegistrationDoc" ||
-      file.fieldname === "stateIdDoc" ||
-      file.fieldname === "driversLicenseDoc" ||
-      file.fieldname === "ssnDoc" ||
-      file.fieldname === "insuranceDoc"
-    ) {
-      if (
-        file.mimetype === "application/pdf" ||
-        file.mimetype === "image/png" ||
-        file.mimetype === "image/jpg" ||
-        file.mimetype === "image/jpeg" ||
-        file.mimetype === "image/webp" ||
-        file.mimetype === "application/octet-stream"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only PDF or image files are supported for driver documents",
-          ),
-        );
-      }
-    } else if (file.fieldname === "audio") {
-      if (
-        file.mimetype === "audio/mpeg" ||
-        file.mimetype === "audio/mp3" ||
-        file.mimetype === "audio/wav" ||
-        file.mimetype === "audio/ogg" ||
-        file.mimetype === "audio/webm"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only .mp3, .wav, .ogg, .webm audio files are supported",
-          ),
-        );
-      }
-    } else if (file.fieldname === "video") {
-      if (
-        file.mimetype === "video/mp4" ||
-        file.mimetype === "video/webm" ||
-        file.mimetype === "video/quicktime" ||
-        file.mimetype === "video/x-msvideo" ||
-        file.mimetype === "video/x-matroska" ||
-        file.mimetype === "video/mpeg"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only .mp4, .webm, .mov, .avi, .mkv, .mpeg video files are supported",
-          ),
-        );
-      }
-    } else if (file.fieldname === "document") {
-      if (
-        file.mimetype === "application/pdf" ||
-        file.mimetype === "application/msword" ||
-        file.mimetype ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        file.mimetype === "application/vnd.ms-excel" ||
-        file.mimetype ===
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        file.mimetype === "application/vnd.ms-powerpoint" ||
-        file.mimetype ===
-          "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-        file.mimetype === "text/plain" ||
-        file.mimetype === "application/rtf" ||
-        file.mimetype === "application/zip" ||
-        file.mimetype === "application/x-7z-compressed" ||
-        file.mimetype === "application/x-rar-compressed"
-      ) {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "Only PDF, Word, Excel, PowerPoint, text, RTF, zip, 7z, and rar files are supported",
-          ),
-        );
-      }
-    } else {
-      // Allow PDF files for all other field types
-      if (file.mimetype === "application/pdf") {
-        cb(null, true);
-      } else {
-        cb(
-          new ApiError(
-            StatusCodes.BAD_REQUEST,
-            "This file type is not supported",
-          ),
-        );
-      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only .jpeg, .jpg, .png, .svg, .webp files are supported",
+        ),
+      );
     }
+
+    if (
+      [
+        "vehicleRegistrationDoc",
+        "stateIdDoc",
+        "driversLicenseDoc",
+        "ssnDoc",
+        "insuranceDoc",
+      ].includes(file.fieldname)
+    ) {
+      if (
+        [
+          "application/pdf",
+          "image/png",
+          "image/jpg",
+          "image/jpeg",
+          "image/webp",
+          "application/octet-stream",
+        ].includes(file.mimetype)
+      ) {
+        return cb(null, true);
+      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only PDF or image files are supported for driver documents",
+        ),
+      );
+    }
+
+    if (file.fieldname === "attachments") {
+      if (attachmentMimeTypes.includes(file.mimetype)) {
+        return cb(null, true);
+      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only image or PDF files are supported for message attachments",
+        ),
+      );
+    }
+
+    if (file.fieldname === "audio") {
+      if (
+        [
+          "audio/mpeg",
+          "audio/mp3",
+          "audio/wav",
+          "audio/ogg",
+          "audio/webm",
+        ].includes(file.mimetype)
+      ) {
+        return cb(null, true);
+      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only .mp3, .wav, .ogg, .webm audio files are supported",
+        ),
+      );
+    }
+
+    if (file.fieldname === "video") {
+      if (
+        [
+          "video/mp4",
+          "video/webm",
+          "video/quicktime",
+          "video/x-msvideo",
+          "video/x-matroska",
+          "video/mpeg",
+        ].includes(file.mimetype)
+      ) {
+        return cb(null, true);
+      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only .mp4, .webm, .mov, .avi, .mkv, .mpeg video files are supported",
+        ),
+      );
+    }
+
+    if (file.fieldname === "document") {
+      if (
+        [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-powerpoint",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "text/plain",
+          "application/rtf",
+          "application/zip",
+          "application/x-7z-compressed",
+          "application/x-rar-compressed",
+        ].includes(file.mimetype)
+      ) {
+        return cb(null, true);
+      }
+
+      return cb(
+        new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "Only PDF, Word, Excel, PowerPoint, text, RTF, zip, 7z, and rar files are supported",
+        ),
+      );
+    }
+
+    return cb(
+      new ApiError(StatusCodes.BAD_REQUEST, "This file type is not supported"),
+    );
   };
 
   const upload = multer({
-    storage: storage,
+    storage,
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB file size limit
+      fileSize: 100 * 1024 * 1024,
     },
-    fileFilter: filterFilter,
+    fileFilter,
   }).fields([
     { name: "image", maxCount: 1 },
     { name: "profileImage", maxCount: 1 },
+    { name: "parcelPhotos", maxCount: 10 },
     { name: "seatingView", maxCount: 10 },
     { name: "nidFrontPic", maxCount: 1 },
-    { name: "thumbnail", maxCount: 5 }, // Added this line for thumbnail
-    // ---------------- Driver registration ----------------
+    { name: "thumbnail", maxCount: 5 },
     { name: "vehicleImage", maxCount: 5 },
     { name: "vehicleRegistrationDoc", maxCount: 1 },
     { name: "stateIdDoc", maxCount: 1 },
@@ -247,7 +280,9 @@ const fileUploadHandler = () => {
     { name: "cover", maxCount: 1 },
     { name: "audio", maxCount: 5 },
     { name: "video", maxCount: 5 },
+    { name: "attachments", maxCount: 10 },
   ]);
+
   return upload;
 };
 

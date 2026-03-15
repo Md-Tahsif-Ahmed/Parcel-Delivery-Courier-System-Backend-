@@ -22,7 +22,7 @@ const parseAllFilesData = (...fields: FieldInput[]) => {
           const files = (
             req.files as { [fieldname: string]: Express.Multer.File[] }
           )[fieldName];
-          filePaths = files ? files.map((file) => file.path) : [];
+          filePaths = files ? files.map((file) => `uploads/${fieldName}/${file.filename}`) : [];
         }
 
         if (filePaths) {

@@ -6,6 +6,7 @@ import { Message } from "./message.model";
 import { emitToDelivery, emitToUser } from "../../../helpers/socketHelper";
 import { sendNotifications } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.constant";
+import { ISendMessagePayload } from "./message.interface";
 
 const validateDeliveryParticipant = async (
   deliveryId: string,
@@ -36,7 +37,10 @@ const validateDeliveryParticipant = async (
   return delivery;
 };
 
-const sendMessageToDB = async (user: JwtPayload, payload: any) => {
+const sendMessageToDB = async (
+  user: JwtPayload,
+  payload: ISendMessagePayload,
+) => {
   const delivery = await validateDeliveryParticipant(payload.deliveryId, user.id);
 
   const participants = [
@@ -55,12 +59,22 @@ const sendMessageToDB = async (user: JwtPayload, payload: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Receiver cannot be sender");
   }
 
+  const normalizedText = payload.text?.trim() ?? "";
+  const attachments = payload.attachments ?? [];
+
+  if (!normalizedText && attachments.length === 0) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Either text or at least one attachment is required",
+    );
+  }
+
   const message = await Message.create({
     deliveryId: payload.deliveryId,
     senderId: user.id,
     receiverId: payload.receiverId,
-    text: payload.text,
-    attachments: payload.attachments ?? [],
+    text: normalizedText,
+    attachments,
   });
 
   const populated = await Message.findById(message._id)
@@ -73,10 +87,11 @@ const sendMessageToDB = async (user: JwtPayload, payload: any) => {
 
   await sendNotifications({
     receiver: payload.receiverId,
-    text:
-      payload.text.length > 80
-        ? `${payload.text.slice(0, 77)}...`
-        : payload.text,
+    text: normalizedText
+      ? normalizedText.length > 80
+        ? `${normalizedText.slice(0, 77)}...`
+        : normalizedText
+      : "Sent you an attachment",
     referenceId: payload.deliveryId,
     type: NOTIFICATION_TYPE.MESSAGE,
     metadata: {
@@ -91,12 +106,12 @@ const sendMessageToDB = async (user: JwtPayload, payload: any) => {
 const getMessagesFromDB = async (
   user: JwtPayload,
   deliveryId: string,
-  query: any,
+  query: Record<string, unknown>,
 ) => {
   await validateDeliveryParticipant(deliveryId, user.id);
 
-  const page = Number(query.page ?? 1);
-  const limit = Number(query.limit ?? 50);
+  const page = Math.max(Number(query.page ?? 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit ?? 50), 1), 100);
   const skip = (page - 1) * limit;
 
   const [data, total, unreadCount] = await Promise.all([

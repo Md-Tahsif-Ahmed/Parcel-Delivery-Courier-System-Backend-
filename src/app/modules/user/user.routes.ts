@@ -92,7 +92,7 @@ const requireAnyUser = auth(
   USER_ROLES.CUSTOMER,
   USER_ROLES.DRIVER,
 );
-const AdminOrUser = auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER);
+const AdminOrUser = auth(USER_ROLES.ADMIN, USER_ROLES.CUSTOMER, USER_ROLES.DRIVER);
 
 /* ---------------------------- PROFILE ROUTES ---------------------------- */
 router

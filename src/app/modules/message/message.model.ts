@@ -1,14 +1,7 @@
 import { model, Schema } from "mongoose";
 import { IMessage, MessageModel } from "./message.interface";
 
-const attachmentSchema = new Schema(
-  {
-    url: { type: String, required: true },
-    type: { type: String, default: null },
-  },
-  { _id: false },
-);
-
+ 
 const messageSchema = new Schema<IMessage, MessageModel>(
   {
     deliveryId: {
@@ -28,13 +21,14 @@ const messageSchema = new Schema<IMessage, MessageModel>(
     },
     text: {
       type: String,
-      required: true,
       trim: true,
+      default: "",
     },
     attachments: {
-      type: [attachmentSchema],
+      type: [String],
       default: [],
     },
+
     isRead: {
       type: Boolean,
       default: false,

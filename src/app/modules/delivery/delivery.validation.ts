@@ -73,7 +73,6 @@
 //   }),
 // };
 
-
 import { z } from "zod";
 
 const pointSchema = z.object({
@@ -102,7 +101,8 @@ export const DeliveryValidation = {
           isFragile: z.boolean().optional(),
           isLiquid: z.boolean().optional(),
           isValuable: z.boolean().optional(),
-          photos: z.array(z.string()).optional(),
+          parcelPhotos: z.array(z.string()).optional(),
+
         })
         .optional(),
       customerOfferFare: z.number().min(1),
@@ -116,62 +116,71 @@ export const DeliveryValidation = {
     }),
   }),
 
+  // cencel + update
 
-  // cencel + update 
+     changeOffer: z.object({
+      params: z.object({
+        id: z.string(),
+      }),
+      body: z.object({
+        customerOfferFare: z.number().min(1),
+      }),
+    }),
 
   cancelDelivery: z.object({
-  params: z.object({
-    id: z.string(),
+    params: z.object({
+      id: z.string(),
+    }),
   }),
-}),
 
-changeDeliveryInfo: z.object({
-  params: z.object({
-    id: z.string(),
+  changeDeliveryInfo: z.object({
+    params: z.object({
+      id: z.string(),
+    }),
+    body: z.object({
+      vehicleType: z.string().optional(),
+
+      pickup: z
+        .object({
+          lat: z.number().optional(),
+          lng: z.number().optional(),
+          address: z.string().optional(),
+        })
+        .optional(),
+
+      dropoff: z
+        .object({
+          lat: z.number().optional(),
+          lng: z.number().optional(),
+          address: z.string().optional(),
+        })
+        .optional(),
+
+      receiver: z
+        .object({
+          name: z.string().optional(),
+          phone: z.string().optional(),
+          note: z.string().optional(),
+        })
+        .optional(),
+
+      parcel: z
+        .object({
+          type: z.string().optional(),
+          size: z.string().optional(),
+          weightKg: z.number().optional(),
+          description: z.string().optional(),
+          isFragile: z.boolean().optional(),
+          isLiquid: z.boolean().optional(),
+          isValuable: z.boolean().optional(),
+          parcelPhotos: z.array(z.string()).optional(),
+
+        })
+        .optional(),
+
+      customerOfferFare: z.number().min(1).optional(),
+    }),
   }),
-  body: z.object({
-    vehicleType: z.string().optional(),
-
-    pickup: z
-      .object({
-        lat: z.number().optional(),
-        lng: z.number().optional(),
-        address: z.string().optional(),
-      })
-      .optional(),
-
-    dropoff: z
-      .object({
-        lat: z.number().optional(),
-        lng: z.number().optional(),
-        address: z.string().optional(),
-      })
-      .optional(),
-
-    receiver: z
-      .object({
-        name: z.string().optional(),
-        phone: z.string().optional(),
-        note: z.string().optional(),
-      })
-      .optional(),
-
-    parcel: z
-      .object({
-        type: z.string().optional(),
-        size: z.string().optional(),
-        weightKg: z.number().optional(),
-        description: z.string().optional(),
-        isFragile: z.boolean().optional(),
-        isLiquid: z.boolean().optional(),
-        isValuable: z.boolean().optional(),
-        photos: z.array(z.string()).optional(),
-      })
-      .optional(),
-
-    customerOfferFare: z.number().min(1).optional(),
-  }),
-}),
 
   // ✅ NEW: driver accept an OPEN delivery
   driverAcceptOpen: z.object({
@@ -197,16 +206,7 @@ changeDeliveryInfo: z.object({
     }),
   }),
 
-  // ✅ NEW: customer reply bid
-  replyBid: z.object({
-    params: z.object({
-      id: z.string(),
-    }),
-    body: z.object({
-      driverId: z.string(),
-      customerCounterFare: z.number().min(1),
-    }),
-  }),
+ 
 
   driverBid: z.object({
     body: z.object({
@@ -222,7 +222,7 @@ changeDeliveryInfo: z.object({
     }),
   }),
 
-    rateDelivery: z.object({
+  rateDelivery: z.object({
     params: z.object({
       id: z.string(),
     }),
@@ -230,6 +230,7 @@ changeDeliveryInfo: z.object({
       stars: z.number().min(1).max(5),
       note: z.string().max(500).optional(),
     }),
-  }),
 
+ 
+  }),
 };

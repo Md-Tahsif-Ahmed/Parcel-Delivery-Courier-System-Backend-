@@ -6,17 +6,12 @@ import { MediaRoutes } from "../modules/media/media.route";
 import { PaymentRoutes } from "../modules/payment/payment.routes";
 import { stripeCEARoutes } from "../modules/stripeCEA/stripeCEA.routes";
 import { transactionRoutes } from "../modules/transaction/transaction.routes";
-import { artistRoutes } from "../modules/artist/artist.routes";
-import { eventRoutes } from "../modules/event/event.routes";
-import { OrderRoutes } from "../modules/order/order.routes";
 import { contactRoutes } from "../modules/contuct/contuct.routes";
 import { AboutUsRoutes } from "../modules/about/about-us.route";
 import { RefundPolicyRoutes } from "../modules/refundPolicy/refund-policy.route";
 import { PrivacyRoutes } from "../modules/privacy/privacy-policy.route";
 import { TermsAndConditionsRoutes } from "../modules/terms/terms-and-conditions.route";
 import { MailAdminRoutes } from "../modules/mailAdmin/mailAdmin.routes";
-import { DashboardRoutes } from "../modules/dashboard/dashboard.routes";
-import { TeamRoutes } from "../modules/team/team.routes";
 import { DeliveryRoutes } from "../modules/delivery/delivery.routes";
 import { PricingRoutes } from "../modules/pricing/pricing.routes";
 import { ReportRoutes } from "../modules/Report/report.routes";
@@ -35,23 +30,7 @@ const apiRoutes = [
     path: "/auth",
     route: AuthRoutes,
   },
-  {
-    path: "/events",
-    route: eventRoutes,
-  },
-  {
-    path: "/artists",
-    route: artistRoutes,
-  },
-  {
-    path: "/teams",
-    route: TeamRoutes,
-  },
-  {
-    path: "/orders",
-    route: OrderRoutes,
-  },
-
+ 
   {
     path: "/medias",
     route: MediaRoutes,
@@ -100,11 +79,6 @@ const apiRoutes = [
     path: "/mail-admin",
     route: MailAdminRoutes,
   },
-
-  {
-    path: "/dashboard",
-    route: DashboardRoutes,
-  },
   {
     path: "/deliveries",
     route: DeliveryRoutes,
@@ -121,7 +95,7 @@ const apiRoutes = [
     path: "/call-sessions",
     route: callSessionRouters,
   },
-    {
+  {
     path: "/notifications",
     route: NotificationRoutes,
   },

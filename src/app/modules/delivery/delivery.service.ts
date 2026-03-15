@@ -491,34 +491,7 @@
 // // };
 
 
-
-// export const customerReplyBidToDB = async (
-//   user: JwtPayload,
-//   deliveryId: string,
-//   driverId: string,
-//   customerCounterFare: number,
-// ) => {
-//   if (user.role !== USER_ROLES.CUSTOMER) {
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-//   }
-
-//   const delivery = await Delivery.findById(deliveryId);
-//   if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-//   if (delivery.customerId.toString() !== user.id) throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-//   const offer = await DeliveryOffer.findOne({
-//     deliveryId,
-//     driverId,
-//     status: OFFER_STATUS.PENDING,
-//   });
-
-//   if (!offer) throw new ApiError(StatusCodes.NOT_FOUND, "No pending bid from driver");
-
-//   offer.customerCounterFare = customerCounterFare;
-//   await offer.save();
-
-//   return offer;
-// };
+ 
 
 // export const listOffersToDB = async (user: JwtPayload, deliveryId: string) => {
 //   const delivery = await Delivery.findById(deliveryId);
@@ -537,92 +510,7 @@
 //   );
 //   return { delivery, offers };
 // };
-
-// export const customerAcceptOfferToDB = async (
-//   user: JwtPayload,
-//   deliveryId: string,
-//   offerId: string,
-// ) => {
-//   if (user.role !== USER_ROLES.CUSTOMER)
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-
-//   const delivery = await Delivery.findById(deliveryId);
-//   if (!delivery)
-//     throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-//   if (delivery.customerId.toString() !== user.id)
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-//   const offer = await DeliveryOffer.findById(offerId);
-//   if (!offer || offer.deliveryId.toString() !== deliveryId) {
-//     throw new ApiError(StatusCodes.NOT_FOUND, "Offer not found");
-//   }
-
-//   // accept this offer, reject others
-//   await DeliveryOffer.updateMany(
-//     { deliveryId, _id: { $ne: offerId } },
-//     { $set: { status: OFFER_STATUS.REJECTED } },
-//   );
-//   offer.status = OFFER_STATUS.ACCEPTED;
-//   await offer.save();
-
-//   delivery.acceptedOfferId = offer._id;
-//   delivery.selectedDriverId = offer.driverId;
-//   delivery.status = DELIVERY_STATUS.ACCEPTED;
-//   await delivery.save();
-
-//   return { delivery, offer };
-// };
-
-// /**
-//  * Book now: create stripe payment intent, store intentId.
-//  * webhook will mark PAID later.
-//  */
-// export const bookNowToDB = async (user: JwtPayload, deliveryId: string) => {
-//   if (user.role !== USER_ROLES.CUSTOMER)
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-
-//   const delivery = await Delivery.findById(deliveryId);
-//   if (!delivery)
-//     throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-//   if (delivery.customerId.toString() !== user.id)
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-//   if (delivery.status !== DELIVERY_STATUS.ACCEPTED) {
-//     throw new ApiError(StatusCodes.BAD_REQUEST, "Delivery is not accepted yet");
-//   }
-
-//   // amount = acceptedFare (offer) else customerOfferFare
-//   let amountUsd = delivery.customerOfferFare;
-//   if (delivery.acceptedOfferId) {
-//     const offer = await DeliveryOffer.findById(delivery.acceptedOfferId);
-//     if (offer) amountUsd = offer.offeredFare;
-//   }
-//   const currency = delivery.pricing?.currency ?? "usd";
-//   const paymentIntent = await stripe.paymentIntents.create({
-//     amount: Math.round(amountUsd * 100),
-//     currency,
-//     metadata: {
-//       deliveryId: delivery._id.toString(),
-//       customerId: delivery.customerId.toString(),
-//       selectedDriverId: delivery.selectedDriverId?.toString() ?? "",
-//     },
-//     automatic_payment_methods: { enabled: true },
-//   });
-
-//   delivery.status = DELIVERY_STATUS.PAYMENT_PENDING;
-//   delivery.payment = {
-//     intentId: paymentIntent.id,
-//     status: "PENDING",
-//     paidAt: null,
-//   };
-//   await delivery.save();
-
-//   return {
-//     clientSecret: paymentIntent.client_secret,
-//     intentId: paymentIntent.id,
-//     delivery,
-//   };
-// };
+ 
 
 // export const driverStartJourneyToDB = async (
 //   user: JwtPayload,
@@ -902,6 +790,76 @@ const notifyUser = async (
   });
 };
 
+const getEligibleNearbyDrivers = async (
+  pickupPoint: { coordinates: [number, number] },
+  vehicleType: string,
+  radiusKm = 8,
+  limit = 100,
+) => {
+  const [lng, lat] = pickupPoint.coordinates;
+
+  const drivers = await User.aggregate([
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "distanceMeters",
+        spherical: true,
+        maxDistance: radiusKm * 1000,
+        query: {
+          role: USER_ROLES.DRIVER,
+          "driverStatus.isOnline": true,
+          "driverStatus.isAvailable": true,
+          "driverRegistration.vehicleInfo.vehicleType": vehicleType,
+          "driverStatus.location": { $exists: true },
+          "driverStatus.location.coordinates": { $exists: true, $type: "array" },
+        },
+      },
+    },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+      },
+    },
+  ]);
+
+  return drivers.map((driver) => String(driver._id));
+};
+
+const getInterestedDriverIds = async (deliveryId: string) => {
+  const [acceptances, offers] = await Promise.all([
+    DeliveryAcceptance.find({
+      deliveryId,
+      status: ACCEPTANCE_STATUS.ACCEPTED,
+    })
+      .select("driverId")
+      .lean(),
+    DeliveryOffer.find({
+      deliveryId,
+      status: OFFER_STATUS.PENDING,
+    })
+      .select("driverId")
+      .lean(),
+  ]);
+
+  return Array.from(
+    new Set([
+      ...acceptances.map((item) => String(item.driverId)),
+      ...offers.map((item) => String(item.driverId)),
+    ]),
+  );
+};
+
+const emitToDrivers = (
+  driverIds: string[],
+  event: string,
+  payload: Record<string, unknown>,
+) => {
+  for (const driverId of driverIds) {
+    emitToUser(driverId, event, payload);
+  }
+};
+
 export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
   if (user.role !== USER_ROLES.CUSTOMER) {
     throw new ApiError(
@@ -931,7 +889,11 @@ export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
       point: toPoint(payload.dropoff.lat, payload.dropoff.lng),
     },
     receiver: payload.receiver,
-    parcel: payload.parcel ?? {},
+    // parcel: payload.parcel ?? {},
+    parcel: {
+  ...(payload.parcel ?? {}),
+  photos: payload?.parcel?.photos ?? [],
+},
     pricing: estimate,
     customerOfferFare: payload.customerOfferFare,
     status: DELIVERY_STATUS.OPEN,
@@ -942,7 +904,112 @@ export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
     customerId: String(doc.customerId),
   });
 
+  const nearbyDriverIds = await getEligibleNearbyDrivers(
+    doc.pickup.point as any,
+    doc.vehicleType,
+  );
+
+  emitToDrivers(nearbyDriverIds, "driver:home:new-delivery", {
+    deliveryId: String(doc._id),
+    customerId: String(doc.customerId),
+    vehicleType: doc.vehicleType,
+    pickup: doc.pickup,
+    dropoff: doc.dropoff,
+    receiver: doc.receiver,
+    parcel: doc.parcel,
+    pricing: doc.pricing,
+    customerOfferFare: doc.customerOfferFare,
+    status: doc.status,
+    createdAt: doc.createdAt,
+  });
+
   return doc;
+};
+
+
+export const changeDeliveryOfferToDB = async (
+  user: JwtPayload,
+  deliveryId: string,
+  customerOfferFare: number,
+) => {
+  if (user.role !== USER_ROLES.CUSTOMER) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      "Only customer can change offer",
+    );
+  }
+
+  const delivery = await Delivery.findById(deliveryId);
+  if (!delivery) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  }
+
+  if (delivery.customerId.toString() !== user.id) {
+    throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
+  }
+
+  // only before final selection / payment flow
+  if (delivery.status !== DELIVERY_STATUS.OPEN) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Offer can be changed only when delivery is OPEN",
+    );
+  }
+
+  const nextFare = Number(customerOfferFare);
+  if (!Number.isFinite(nextFare) || nextFare <= 0) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "customerOfferFare must be a positive number",
+    );
+  }
+
+  const oldInterestedDriverIds = await getInterestedDriverIds(String(delivery._id));
+
+  delivery.customerOfferFare = nextFare;
+  delivery.updatedAt = new Date();
+  await delivery.save();
+
+  // old interests are stale now, because price changed
+  await DeliveryAcceptance.deleteMany({ deliveryId: delivery._id });
+  await DeliveryOffer.deleteMany({ deliveryId: delivery._id });
+
+  emitDeliveryEvent(String(delivery._id), "delivery:offer-changed", {
+    customerId: user.id,
+    customerOfferFare: delivery.customerOfferFare,
+    status: delivery.status,
+  });
+
+  // remove old cards / stale interest from previous drivers
+  emitToDrivers(oldInterestedDriverIds, "driver:home:delivery-removed", {
+    deliveryId: String(delivery._id),
+    reason: "OFFER_CHANGED",
+    status: delivery.status,
+  });
+
+  // rebroadcast same delivery with new fare
+  const nearbyDriverIds = await getEligibleNearbyDrivers(
+    delivery.pickup.point as any,
+    delivery.vehicleType,
+  );
+
+  emitToDrivers(nearbyDriverIds, "driver:home:new-delivery", {
+    deliveryId: String(delivery._id),
+    customerId: String(delivery.customerId),
+    vehicleType: delivery.vehicleType,
+    pickup: delivery.pickup,
+    dropoff: delivery.dropoff,
+    receiver: delivery.receiver,
+    parcel: delivery.parcel,
+    pricing: delivery.pricing,
+    customerOfferFare: delivery.customerOfferFare,
+    status: delivery.status,
+    createdAt: delivery.createdAt,
+    updatedAt: delivery.updatedAt,
+    isOfferUpdated: true,
+  });
+
+  return delivery;
 };
 
 export const cancelDeliveryToDB = async (
@@ -965,12 +1032,14 @@ export const cancelDeliveryToDB = async (
     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
   }
 
-  if (delivery.status !== DELIVERY_STATUS.OPEN) {
+  if (delivery.status !== DELIVERY_STATUS.OPEN && delivery.status !== DELIVERY_STATUS.ACCEPTED) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      "Only OPEN delivery can be cancelled",
+      "Only OPEN or ACCEPTED delivery can be cancelled",
     );
   }
+
+  const interestedDriverIds = await getInterestedDriverIds(String(delivery._id));
 
   delivery.status = DELIVERY_STATUS.CANCELLED;
   await delivery.save();
@@ -982,6 +1051,20 @@ export const cancelDeliveryToDB = async (
     status: delivery.status,
     cancelledBy: user.id,
   });
+
+  emitToDrivers(interestedDriverIds, "driver:home:delivery-removed", {
+    deliveryId: String(delivery._id),
+    reason: "CUSTOMER_CANCELLED",
+    status: delivery.status,
+  });
+
+  if (delivery.selectedDriverId) {
+    emitToUser(String(delivery.selectedDriverId), "delivery:cancelled", {
+      deliveryId: String(delivery._id),
+      status: delivery.status,
+      cancelledBy: user.id,
+    });
+  }
 
   return delivery;
 };
@@ -1013,6 +1096,8 @@ export const changeDeliveryInfoToDB = async (
       "Only OPEN delivery can be changed",
     );
   }
+
+  const oldInterestedDriverIds = await getInterestedDriverIds(String(delivery._id));
 
   const nextVehicleType = payload.vehicleType ?? delivery.vehicleType;
 
@@ -1070,7 +1155,6 @@ export const changeDeliveryInfoToDB = async (
   delivery.parcel = nextParcel as any;
   delivery.customerOfferFare = nextCustomerOfferFare;
   delivery.pricing = estimate as any;
-
   delivery.selectedDriverId = null;
   delivery.acceptedOfferId = null;
   delivery.status = DELIVERY_STATUS.OPEN;
@@ -1083,6 +1167,32 @@ export const changeDeliveryInfoToDB = async (
   emitDeliveryEvent(String(delivery._id), "delivery:changed", {
     status: delivery.status,
     customerId: user.id,
+  });
+
+  emitToDrivers(oldInterestedDriverIds, "driver:home:delivery-removed", {
+    deliveryId: String(delivery._id),
+    reason: "DELIVERY_CHANGED",
+    status: delivery.status,
+  });
+
+  const newNearbyDriverIds = await getEligibleNearbyDrivers(
+    delivery.pickup.point as any,
+    delivery.vehicleType,
+  );
+
+  emitToDrivers(newNearbyDriverIds, "driver:home:new-delivery", {
+    deliveryId: String(delivery._id),
+    customerId: String(delivery.customerId),
+    vehicleType: delivery.vehicleType,
+    pickup: delivery.pickup,
+    dropoff: delivery.dropoff,
+    receiver: delivery.receiver,
+    parcel: delivery.parcel,
+    pricing: delivery.pricing,
+    customerOfferFare: delivery.customerOfferFare,
+    status: delivery.status,
+    createdAt: delivery.createdAt,
+    updatedAt: delivery.updatedAt,
   });
 
   return delivery;
@@ -1124,6 +1234,8 @@ export const getDriverMatchesToDB = async (
           "driverStatus.isOnline": true,
           "driverStatus.isAvailable": true,
           "driverRegistration.vehicleInfo.vehicleType": delivery.vehicleType,
+          "driverStatus.location": { $exists: true },
+          "driverStatus.location.coordinates": { $exists: true, $type: "array" },
         },
       },
     },
@@ -1156,7 +1268,9 @@ export const driverAcceptOpenDeliveryToDB = async (
   }
 
   const delivery = await Delivery.findById(deliveryId);
-  if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  if (!delivery) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  }
 
   if (delivery.status !== DELIVERY_STATUS.OPEN) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Delivery is not open now");
@@ -1164,9 +1278,15 @@ export const driverAcceptOpenDeliveryToDB = async (
 
   const driver = await User.findById(user.id).lean();
   const driverVehicle = driver?.driverRegistration?.vehicleInfo?.vehicleType;
+
   if (driverVehicle && driverVehicle !== delivery.vehicleType) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Vehicle type mismatch");
   }
+
+  await DeliveryOffer.deleteOne({
+    deliveryId: delivery._id,
+    driverId: user.id,
+  });
 
   await DeliveryAcceptance.findOneAndUpdate(
     { deliveryId: delivery._id, driverId: user.id },
@@ -1180,13 +1300,52 @@ export const driverAcceptOpenDeliveryToDB = async (
 
   await notifyUser(
     String(delivery.customerId),
-    "A driver is interested in your delivery request.",
+    "A driver accepted your offered fare.",
     String(delivery._id),
     { driverId: user.id },
   );
 
   return { accepted: true };
 };
+
+// export const getFindingCouriersToDB = async (
+//   user: JwtPayload,
+//   deliveryId: string,
+// ) => {
+//   if (user.role !== USER_ROLES.CUSTOMER) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
+//   }
+
+//   const delivery = await Delivery.findById(deliveryId);
+//   if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+//   if (delivery.customerId.toString() !== user.id) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
+//   }
+
+//   const acceptances = await DeliveryAcceptance.find({
+//     deliveryId,
+//     status: ACCEPTANCE_STATUS.ACCEPTED,
+//   })
+//     .populate(
+//       "driverId",
+//       "firstName lastName profileImage driverStatus driverRegistration.vehicleInfo",
+//     )
+//     .sort({ createdAt: -1 })
+//     .lean();
+
+//   const offers = await DeliveryOffer.find({
+//     deliveryId,
+//     status: OFFER_STATUS.PENDING,
+//   })
+//     .populate(
+//       "driverId",
+//       "firstName lastName profileImage driverStatus driverRegistration.vehicleInfo",
+//     )
+//     .sort({ createdAt: -1 })
+//     .lean();
+
+//   return { delivery, acceptances, offers };
+// };
 
 export const getFindingCouriersToDB = async (
   user: JwtPayload,
@@ -1196,54 +1355,180 @@ export const getFindingCouriersToDB = async (
     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
   }
 
-  const delivery = await Delivery.findById(deliveryId);
-  if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-  if (delivery.customerId.toString() !== user.id) {
+  const delivery = await Delivery.findById(deliveryId).lean();
+  if (!delivery) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  }
+
+  if (String(delivery.customerId) !== user.id) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
   }
 
-  const acceptances = await DeliveryAcceptance.find({
-    deliveryId,
-    status: ACCEPTANCE_STATUS.ACCEPTED,
-  })
-    .populate(
-      "driverId",
-      "firstName lastName profileImage driverStatus driverRegistration.vehicleInfo",
-    )
-    .sort({ createdAt: -1 })
-    .lean();
+  if (delivery.status !== DELIVERY_STATUS.OPEN) {
+    return {
+      delivery,
+      couriers: [],
+      summary: {
+        total: 0,
+        acceptedCount: 0,
+        bidCount: 0,
+      },
+    };
+  }
 
-  const offers = await DeliveryOffer.find({
-    deliveryId,
-    status: OFFER_STATUS.PENDING,
-  })
-    .populate(
-      "driverId",
-      "firstName lastName profileImage driverStatus driverRegistration.vehicleInfo",
-    )
-    .sort({ createdAt: -1 })
-    .lean();
+  const [acceptances, offers] = await Promise.all([
+    DeliveryAcceptance.find({
+      deliveryId,
+      status: ACCEPTANCE_STATUS.ACCEPTED,
+    })
+      .populate(
+        "driverId",
+        "firstName lastName fullName profileImage driverStatus driverRegistration.vehicleInfo",
+      )
+      .sort({ createdAt: -1 })
+      .lean(),
 
-  return { delivery, acceptances, offers };
+    DeliveryOffer.find({
+      deliveryId,
+      status: OFFER_STATUS.PENDING,
+    })
+      .populate(
+        "driverId",
+        "firstName lastName fullName profileImage driverStatus driverRegistration.vehicleInfo",
+      )
+      .sort({ createdAt: -1 })
+      .lean(),
+  ]);
+
+  const acceptedDriverIds = new Set(
+    acceptances.map((item) => String(item.driverId?._id || item.driverId)),
+  );
+
+  const acceptedCouriers = acceptances.map((item) => {
+    const driver: any = item.driverId;
+
+    return {
+      itemType: "ACCEPT",
+      priceTone: "GREEN",
+      canSelect: true,
+      offerId: null,
+      acceptanceId: String(item._id),
+      driverId: String(driver?._id || item.driverId),
+      selectedFare: Number(delivery.customerOfferFare ?? 0),
+      customerOfferFare: Number(delivery.customerOfferFare ?? 0),
+      offeredFare: null,
+      note: null,
+      respondedAt: item.createdAt,
+      driver: {
+        _id: driver?._id,
+        firstName: driver?.firstName ?? "",
+        lastName: driver?.lastName ?? "",
+        fullName:
+          driver?.fullName ||
+          `${driver?.firstName ?? ""} ${driver?.lastName ?? ""}`.trim(),
+        profileImage: driver?.profileImage ?? null,
+        driverStatus: driver?.driverStatus ?? null,
+        vehicleInfo: driver?.driverRegistration?.vehicleInfo ?? null,
+      },
+    };
+  });
+
+  const bidCouriers = offers
+    .filter((item) => {
+      const driverId = String(item.driverId?._id || item.driverId);
+      return !acceptedDriverIds.has(driverId);
+    })
+    .map((item) => {
+      const driver: any = item.driverId;
+
+      return {
+        itemType: "BID",
+        priceTone: "WHITE",
+        canSelect: true,
+        offerId: String(item._id),
+        acceptanceId: null,
+        driverId: String(driver?._id || item.driverId),
+        selectedFare: Number(item.offeredFare ?? 0),
+        customerOfferFare: Number(delivery.customerOfferFare ?? 0),
+        offeredFare: Number(item.offeredFare ?? 0),
+        note: item.note ?? null,
+        respondedAt: item.createdAt,
+        driver: {
+          _id: driver?._id,
+          firstName: driver?.firstName ?? "",
+          lastName: driver?.lastName ?? "",
+          fullName:
+            driver?.fullName ||
+            `${driver?.firstName ?? ""} ${driver?.lastName ?? ""}`.trim(),
+          profileImage: driver?.profileImage ?? null,
+          driverStatus: driver?.driverStatus ?? null,
+          vehicleInfo: driver?.driverRegistration?.vehicleInfo ?? null,
+        },
+      };
+    });
+
+  const couriers = [...acceptedCouriers, ...bidCouriers].sort((a, b) => {
+    if (a.itemType !== b.itemType) {
+      return a.itemType === "ACCEPT" ? -1 : 1;
+    }
+
+    return (
+      new Date(b.respondedAt ?? 0).getTime() - new Date(a.respondedAt ?? 0).getTime()
+    );
+  });
+
+  return {
+    delivery,
+    couriers,
+    summary: {
+      total: couriers.length,
+      acceptedCount: acceptedCouriers.length,
+      bidCount: bidCouriers.length,
+    },
+  };
 };
 
+
 export const driverBidToDB = async (user: JwtPayload, payload: any) => {
-  if (user.role !== USER_ROLES.DRIVER)
+  if (user.role !== USER_ROLES.DRIVER) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
+  }
 
   const delivery = await Delivery.findById(payload.deliveryId);
-  if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  if (!delivery) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  }
 
   if (delivery.status !== DELIVERY_STATUS.OPEN) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Cannot bid now");
   }
 
+  const driver = await User.findById(user.id).lean();
+  const driverVehicle = driver?.driverRegistration?.vehicleInfo?.vehicleType;
+
+  if (driverVehicle && driverVehicle !== delivery.vehicleType) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Vehicle type mismatch");
+  }
+
+  const offeredFare = Number(payload.offeredFare);
+  if (!Number.isFinite(offeredFare) || offeredFare <= 0) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "offeredFare must be a positive number",
+    );
+  }
+
+  await DeliveryAcceptance.deleteOne({
+    deliveryId: delivery._id,
+    driverId: user.id,
+  });
+
   const offer = await DeliveryOffer.findOneAndUpdate(
     { deliveryId: delivery._id, driverId: user.id },
     {
       $set: {
-        offeredFare: payload.offeredFare,
-        note: payload.note,
+        offeredFare,
+        note: payload.note ?? null,
         status: OFFER_STATUS.PENDING,
       },
     },
@@ -1254,18 +1539,104 @@ export const driverBidToDB = async (user: JwtPayload, payload: any) => {
     driverId: user.id,
     offerId: String(offer._id),
     offeredFare: offer.offeredFare,
-    customerCounterFare: offer.customerCounterFare ?? null,
   });
 
   await notifyUser(
     String(delivery.customerId),
     "A driver sent a bid for your delivery.",
     String(delivery._id),
-    { driverId: user.id, offerId: String(offer._id) },
+    {
+      driverId: user.id,
+      offerId: String(offer._id),
+      offeredFare: offer.offeredFare,
+    },
   );
 
   return offer;
 };
+
+// export const customerSelectDriverToDB = async (
+//   user: JwtPayload,
+//   deliveryId: string,
+//   driverId: string,
+// ) => {
+//   if (user.role !== USER_ROLES.CUSTOMER) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
+//   }
+
+//   const delivery = await Delivery.findById(deliveryId).select(
+//     "customerId status",
+//   );
+//   if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+//   if (delivery.customerId.toString() !== user.id) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
+//   }
+//   if (delivery.status !== DELIVERY_STATUS.OPEN) {
+//     throw new ApiError(
+//       StatusCodes.BAD_REQUEST,
+//       "Delivery is not selectable now",
+//     );
+//   }
+
+//   const allInterestedDriverIds = await getInterestedDriverIds(deliveryId);
+
+//   const [accepted, offered] = await Promise.all([
+//     DeliveryAcceptance.findOne({
+//       deliveryId,
+//       driverId,
+//       status: ACCEPTANCE_STATUS.ACCEPTED,
+//     }).select("_id"),
+//     DeliveryOffer.findOne({
+//       deliveryId,
+//       driverId,
+//       status: OFFER_STATUS.PENDING,
+//     }).select("_id"),
+//   ]);
+
+//   if (!accepted && !offered) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver did not accept or bid");
+//   }
+
+//   const updated = await Delivery.findOneAndUpdate(
+//     { _id: deliveryId, customerId: user.id, status: DELIVERY_STATUS.OPEN },
+//     { $set: { selectedDriverId: driverId, status: DELIVERY_STATUS.ACCEPTED } },
+//     { new: true },
+//   );
+
+//   if (!updated) {
+//     throw new ApiError(StatusCodes.BAD_REQUEST, "Already selected / not open");
+//   }
+
+//   emitDeliveryEvent(String(updated._id), "delivery:driver-selected", {
+//     driverId,
+//     customerId: user.id,
+//     status: updated.status,
+//   });
+
+//   emitToUser(driverId, "delivery:driver-selected", {
+//     deliveryId: String(updated._id),
+//     driverId,
+//     customerId: user.id,
+//     status: updated.status,
+//   });
+
+//   const otherDriverIds = allInterestedDriverIds.filter((id) => id !== driverId);
+
+//   emitToDrivers(otherDriverIds, "driver:home:job-taken", {
+//     deliveryId: String(updated._id),
+//     selectedDriverId: driverId,
+//     status: updated.status,
+//   });
+
+//   await notifyUser(
+//     driverId,
+//     "You have been selected for a delivery.",
+//     String(updated._id),
+//     { customerId: user.id },
+//   );
+
+//   return updated;
+// };
 
 export const customerSelectDriverToDB = async (
   user: JwtPayload,
@@ -1277,12 +1648,17 @@ export const customerSelectDriverToDB = async (
   }
 
   const delivery = await Delivery.findById(deliveryId).select(
-    "customerId status",
+    "_id customerId status acceptedOfferId selectedDriverId",
   );
-  if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+
+  if (!delivery) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
+  }
+
   if (delivery.customerId.toString() !== user.id) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
   }
+
   if (delivery.status !== DELIVERY_STATUS.OPEN) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
@@ -1307,9 +1683,21 @@ export const customerSelectDriverToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver did not accept or bid");
   }
 
+  const allInterestedDriverIds = await getInterestedDriverIds(deliveryId);
+
   const updated = await Delivery.findOneAndUpdate(
-    { _id: deliveryId, customerId: user.id, status: DELIVERY_STATUS.OPEN },
-    { $set: { selectedDriverId: driverId, status: DELIVERY_STATUS.ACCEPTED } },
+    {
+      _id: deliveryId,
+      customerId: user.id,
+      status: DELIVERY_STATUS.OPEN,
+    },
+    {
+      $set: {
+        selectedDriverId: driverId,
+        status: DELIVERY_STATUS.ACCEPTED,
+        acceptedOfferId: offered?._id ?? null,
+      },
+    },
     { new: true },
   );
 
@@ -1317,10 +1705,47 @@ export const customerSelectDriverToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "Already selected / not open");
   }
 
+  await Promise.all([
+    DeliveryAcceptance.deleteMany({
+      deliveryId,
+      driverId: { $ne: driverId },
+    }),
+    DeliveryOffer.updateMany(
+      {
+        deliveryId,
+        driverId: { $ne: driverId },
+        status: OFFER_STATUS.PENDING,
+      },
+      {
+        $set: {
+          status: OFFER_STATUS.REJECTED,
+        },
+      },
+    ),
+    offered
+      ? DeliveryOffer.findOneAndUpdate(
+          {
+            _id: offered._id,
+            deliveryId,
+            driverId,
+          },
+          {
+            $set: {
+              status: OFFER_STATUS.ACCEPTED,
+            },
+          },
+          { new: true },
+        )
+      : Promise.resolve(null),
+  ]);
+
   emitDeliveryEvent(String(updated._id), "delivery:driver-selected", {
     driverId,
     customerId: user.id,
     status: updated.status,
+    acceptedOfferId: updated.acceptedOfferId
+      ? String(updated.acceptedOfferId)
+      : null,
   });
 
   emitToUser(driverId, "delivery:driver-selected", {
@@ -1328,70 +1753,35 @@ export const customerSelectDriverToDB = async (
     driverId,
     customerId: user.id,
     status: updated.status,
+    acceptedOfferId: updated.acceptedOfferId
+      ? String(updated.acceptedOfferId)
+      : null,
+  });
+
+  const otherDriverIds = allInterestedDriverIds.filter((id) => id !== driverId);
+
+  emitToDrivers(otherDriverIds, "driver:home:job-taken", {
+    deliveryId: String(updated._id),
+    selectedDriverId: driverId,
+    status: updated.status,
   });
 
   await notifyUser(
     driverId,
     "You have been selected for a delivery.",
     String(updated._id),
-    { customerId: user.id },
+    {
+      customerId: user.id,
+      status: updated.status,
+      acceptedOfferId: updated.acceptedOfferId
+        ? String(updated.acceptedOfferId)
+        : null,
+    },
   );
 
   return updated;
 };
 
-export const customerReplyBidToDB = async (
-  user: JwtPayload,
-  deliveryId: string,
-  driverId: string,
-  customerCounterFare: number,
-) => {
-  if (user.role !== USER_ROLES.CUSTOMER) {
-    throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-  }
-
-  const delivery = await Delivery.findById(deliveryId);
-  if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-  if (delivery.customerId.toString() !== user.id)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-  const offer = await DeliveryOffer.findOne({
-    deliveryId,
-    driverId,
-    status: OFFER_STATUS.PENDING,
-  });
-
-  if (!offer)
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      "No pending bid from driver",
-    );
-
-  offer.customerCounterFare = customerCounterFare;
-  await offer.save();
-
-  emitDeliveryEvent(String(delivery._id), "delivery:counter-offer", {
-    driverId,
-    customerCounterFare,
-    offerId: String(offer._id),
-  });
-
-  emitToUser(driverId, "delivery:counter-offer", {
-    deliveryId: String(delivery._id),
-    driverId,
-    customerCounterFare,
-    offerId: String(offer._id),
-  });
-
-  await notifyUser(
-    driverId,
-    "Customer sent you a counter offer.",
-    String(delivery._id),
-    { customerCounterFare, offerId: String(offer._id) },
-  );
-
-  return offer;
-};
 
 export const listOffersToDB = async (user: JwtPayload, deliveryId: string) => {
   const delivery = await Delivery.findById(deliveryId);
@@ -1411,124 +1801,7 @@ export const listOffersToDB = async (user: JwtPayload, deliveryId: string) => {
   return { delivery, offers };
 };
 
-export const customerAcceptOfferToDB = async (
-  user: JwtPayload,
-  deliveryId: string,
-  offerId: string,
-) => {
-  if (user.role !== USER_ROLES.CUSTOMER)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-
-  const delivery = await Delivery.findById(deliveryId);
-  if (!delivery)
-    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-  if (delivery.customerId.toString() !== user.id)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-  const offer = await DeliveryOffer.findById(offerId);
-  if (!offer || offer.deliveryId.toString() !== deliveryId) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Offer not found");
-  }
-
-  await DeliveryOffer.updateMany(
-    { deliveryId, _id: { $ne: offerId } },
-    { $set: { status: OFFER_STATUS.REJECTED } },
-  );
-
-  offer.status = OFFER_STATUS.ACCEPTED;
-  await offer.save();
-
-  delivery.acceptedOfferId = offer._id;
-  delivery.selectedDriverId = offer.driverId;
-  delivery.status = DELIVERY_STATUS.ACCEPTED;
-  await delivery.save();
-
-  emitDeliveryEvent(String(delivery._id), "delivery:driver-selected", {
-    driverId: String(offer.driverId),
-    customerId: user.id,
-    status: delivery.status,
-    offerId: String(offer._id),
-  });
-
-  emitToUser(String(offer.driverId), "delivery:driver-selected", {
-    deliveryId: String(delivery._id),
-    driverId: String(offer.driverId),
-    customerId: user.id,
-    status: delivery.status,
-    offerId: String(offer._id),
-  });
-
-  await notifyUser(
-    String(offer.driverId),
-    "Your offer has been accepted.",
-    String(delivery._id),
-    { customerId: user.id, offerId: String(offer._id) },
-  );
-
-  return { delivery, offer };
-};
-
-export const bookNowToDB = async (user: JwtPayload, deliveryId: string) => {
-  if (user.role !== USER_ROLES.CUSTOMER)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-
-  const delivery = await Delivery.findById(deliveryId);
-  if (!delivery)
-    throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-  if (delivery.customerId.toString() !== user.id)
-    throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-
-  if (delivery.status !== DELIVERY_STATUS.ACCEPTED) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Delivery is not accepted yet");
-  }
-
-  let amountUsd = delivery.customerOfferFare;
-  if (delivery.acceptedOfferId) {
-    const offer = await DeliveryOffer.findById(delivery.acceptedOfferId);
-    if (offer) amountUsd = offer.offeredFare;
-  }
-
-  const currency = delivery.pricing?.currency ?? "usd";
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amountUsd * 100),
-    currency,
-    metadata: {
-      deliveryId: delivery._id.toString(),
-      customerId: delivery.customerId.toString(),
-      selectedDriverId: delivery.selectedDriverId?.toString() ?? "",
-    },
-    automatic_payment_methods: { enabled: true },
-  });
-
-  delivery.status = DELIVERY_STATUS.PAYMENT_PENDING;
-  delivery.payment = {
-    intentId: paymentIntent.id,
-    status: "PENDING",
-    paidAt: null,
-  };
-  await delivery.save();
-
-  emitDeliveryEvent(String(delivery._id), "delivery:payment-pending", {
-    status: delivery.status,
-    driverId: delivery.selectedDriverId?.toString() ?? null,
-  });
-
-  if (delivery.selectedDriverId) {
-    await notifyUser(
-      String(delivery.selectedDriverId),
-      "Customer started payment for the delivery.",
-      String(delivery._id),
-      { status: delivery.status },
-    );
-  }
-
-  return {
-    clientSecret: paymentIntent.client_secret,
-    intentId: paymentIntent.id,
-    delivery,
-  };
-};
+ 
 
 export const driverStartJourneyToDB = async (
   user: JwtPayload,
@@ -1866,7 +2139,30 @@ export const getMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
 };
  
 
-export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
+// export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) => {
+//   if (user.role !== USER_ROLES.DRIVER) {
+//     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
+//   }
+
+//   const baseQuery = Delivery.find({ selectedDriverId: user.id })
+//     .populate("customerId", "firstName lastName profileImage phone")
+//     .populate("selectedDriverId", "firstName lastName profileImage driverStatus");
+
+//   const qb = new QueryBuilder(baseQuery, query)
+//     .filter()
+//     .sort()
+//     .paginate()
+//     .fields();
+
+//   const meta = await qb.countTotal();
+//   const data = await qb.modelQuery.lean();
+
+//   return { meta, data };
+// };
+export const getDriverMyDeliveriesToDB = async (
+  user: JwtPayload,
+  query: any
+) => {
   if (user.role !== USER_ROLES.DRIVER) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
   }
@@ -1882,11 +2178,32 @@ export const getDriverMyDeliveriesToDB = async (user: JwtPayload, query: any) =>
     .fields();
 
   const meta = await qb.countTotal();
-  const data = await qb.modelQuery.lean();
+  const deliveries = await qb.modelQuery.lean();
+
+  const data = deliveries.map((delivery: any) => {
+    const customer = delivery.customerId;
+
+    const customerName = customer
+      ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim()
+      : null;
+
+    return {
+      ...delivery,
+      customer: customer
+        ? {
+            _id: customer._id,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            fullName: customerName,
+          }
+        : null,
+      customerName,
+      customerId: undefined, // optional remove
+    };
+  });
 
   return { meta, data };
 };
-
 
 
 
@@ -2229,7 +2546,10 @@ export const driverCancelDeliveryToDB = async (
     throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
   }
 
-  if (!delivery.selectedDriverId || delivery.selectedDriverId.toString() !== user.id) {
+  if (
+    !delivery.selectedDriverId ||
+    delivery.selectedDriverId.toString() !== user.id
+  ) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Not assigned to you");
   }
 
@@ -2247,8 +2567,31 @@ export const driverCancelDeliveryToDB = async (
   }
 
   delivery.status = DELIVERY_STATUS.CANCELLED_BY_DRIVER;
-
   await delivery.save();
+
+  emitDeliveryEvent(String(delivery._id), "delivery:driver-cancelled", {
+    deliveryId: String(delivery._id),
+    driverId: user.id,
+    customerId: String(delivery.customerId),
+    status: delivery.status,
+  });
+
+  emitToUser(String(delivery.customerId), "delivery:driver-cancelled", {
+    deliveryId: String(delivery._id),
+    driverId: user.id,
+    customerId: String(delivery.customerId),
+    status: delivery.status,
+  });
+
+  await notifyUser(
+    String(delivery.customerId),
+    "Driver cancelled the delivery.",
+    String(delivery._id),
+    {
+      driverId: user.id,
+      status: delivery.status,
+    },
+  );
 
   return delivery;
 };
