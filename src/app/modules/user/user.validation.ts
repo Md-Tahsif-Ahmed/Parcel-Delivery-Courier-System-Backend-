@@ -78,7 +78,7 @@ const createUserZodSchema = z.object({
       email: z.string().optional(),
       phone: z.string().optional(),
       countryCode: z.string().optional(),
-      password: z.string().min(8),
+      password: z.string().min(8).optional(),
       role: z.string(),
     })
     .refine((data) => data.email || data.phone, {

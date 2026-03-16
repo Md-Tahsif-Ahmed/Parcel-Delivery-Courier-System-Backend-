@@ -88,7 +88,7 @@ const createCallSession = async (callerId: string, receiverId: string) => {
             latest.status = CALL_STATUS.MISSED;
             latest.endedAt = new Date();
             await latest.save();
-
+            
             const payload = {
                 sessionId: latest._id.toString(),
                 reason: "No answer",

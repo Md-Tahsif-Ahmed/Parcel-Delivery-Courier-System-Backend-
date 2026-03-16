@@ -23,6 +23,17 @@ router.post(
   AuthController.forgetPassword,
 );
 
+router.post(
+  "/request-login-otp",
+  validateRequest(AuthValidation.createRequestLoginOTPZodSchema),
+  AuthController.requestLoginOTP,
+);
+router.post(
+  "/verify-login-otp",
+  // validateRequest(AuthValidation.createVerifyLoginOTPZodSchema),
+  AuthController.verifyLoginOTP,
+);
+
 router.post("/refresh-token", AuthController.newAccessToken);
 
 router.post("/resend-otp", AuthController.resendVerificationEmail);
