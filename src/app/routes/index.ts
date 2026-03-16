@@ -24,6 +24,7 @@ import { callSessionRouters } from "../modules/callSession/callSession.route";
 import { MessageRoutes } from "../modules/message/message.routes";
 import { NotificationRoutes } from "../modules/notification/notification.routes";
 import { AnalyticsRoutes } from "../modules/analytics/analytics.route";
+import { SupportRoutes } from "../modules/support/support.route";
 
 const router = express.Router();
 
@@ -133,6 +134,10 @@ const apiRoutes = [
   {
     path: "/analytics",
     route: AnalyticsRoutes,
+  },
+  {
+    path: "/supports",
+    route: SupportRoutes,
   },
 ];
 
