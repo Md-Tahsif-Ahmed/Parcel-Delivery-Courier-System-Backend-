@@ -149,7 +149,7 @@ const createUserToDB = async (payload: any) => {
       email: user.email,
     });
 
-    emailHelper.sendEmail(template);
+    await emailHelper.sendEmail(template);
   }
 
   if (user.phone) {
