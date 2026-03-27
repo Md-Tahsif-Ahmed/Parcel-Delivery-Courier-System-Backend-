@@ -767,12 +767,71 @@ const toPoint = (lat: number, lng: number) => ({
   coordinates: [lng, lat] as [number, number],
 });
 
-const emitDeliveryEvent = (
+const getCustomerPublic = async (userId: string) => {
+  if (!userId) return null as any;
+  const u: any = await User.findById(userId)
+    .select("firstName lastName fullName profileImage phone")
+    .lean();
+  if (!u) return null as any;
+  const fullName =
+    u.fullName || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+  return {
+    _id: u._id,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    fullName,
+    profileImage: u.profileImage ?? null,
+    phone: u.phone ?? null,
+  };
+};
+
+const getDriverPublic = async (userId: string) => {
+  if (!userId) return null as any;
+  const u: any = await User.findById(userId)
+    .select(
+      "firstName lastName fullName profileImage driverStatus driverRegistration.vehicleInfo",
+    )
+    .lean();
+  if (!u) return null as any;
+  const fullName =
+    u.fullName || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+  return {
+    _id: u._id,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    fullName,
+    profileImage: u.profileImage ?? null,
+    driverStatus: u.driverStatus ?? null,
+    vehicleInfo: u?.driverRegistration?.vehicleInfo ?? null,
+  };
+};
+
+const emitDeliveryEvent = async (
   deliveryId: string,
   event: string,
   payload: Record<string, unknown>,
 ) => {
-  emitToDelivery(deliveryId, event, { deliveryId, ...payload });
+  const delivery = await Delivery.findById(deliveryId)
+    .select("customerId selectedDriverId")
+    .lean();
+  const customerId = delivery?.customerId
+    ? String(delivery.customerId)
+    : undefined;
+  const driverId = delivery?.selectedDriverId
+    ? String(delivery.selectedDriverId)
+    : undefined;
+  const [customer, driver] = await Promise.all([
+    customerId ? getCustomerPublic(customerId) : Promise.resolve(null),
+    driverId ? getDriverPublic(driverId) : Promise.resolve(null),
+  ]);
+  emitToDelivery(deliveryId, event, {
+    deliveryId,
+    customerId,
+    driverId,
+    customer,
+    driver,
+    ...payload,
+  });
 };
 
 const notifyUser = async (
@@ -899,7 +958,7 @@ export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
     status: DELIVERY_STATUS.OPEN,
   });
 
-  emitDeliveryEvent(String(doc._id), "delivery:created", {
+  await emitDeliveryEvent(String(doc._id), "delivery:created", {
     status: doc.status,
     customerId: String(doc.customerId),
   });
@@ -909,9 +968,11 @@ export const createDeliveryToDB = async (user: JwtPayload, payload: any) => {
     doc.vehicleType,
   );
 
+  const customer = await getCustomerPublic(String(doc.customerId));
   emitToDrivers(nearbyDriverIds, "driver:home:new-delivery", {
     deliveryId: String(doc._id),
     customerId: String(doc.customerId),
+    customer,
     vehicleType: doc.vehicleType,
     pickup: doc.pickup,
     dropoff: doc.dropoff,
@@ -974,7 +1035,7 @@ export const changeDeliveryOfferToDB = async (
   await DeliveryAcceptance.deleteMany({ deliveryId: delivery._id });
   await DeliveryOffer.deleteMany({ deliveryId: delivery._id });
 
-  emitDeliveryEvent(String(delivery._id), "delivery:offer-changed", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:offer-changed", {
     customerId: user.id,
     customerOfferFare: delivery.customerOfferFare,
     status: delivery.status,
@@ -993,9 +1054,11 @@ export const changeDeliveryOfferToDB = async (
     delivery.vehicleType,
   );
 
+  const changedCustomer = await getCustomerPublic(String(delivery.customerId));
   emitToDrivers(nearbyDriverIds, "driver:home:new-delivery", {
     deliveryId: String(delivery._id),
     customerId: String(delivery.customerId),
+    customer: changedCustomer,
     vehicleType: delivery.vehicleType,
     pickup: delivery.pickup,
     dropoff: delivery.dropoff,
@@ -1059,10 +1122,12 @@ export const cancelDeliveryToDB = async (
   });
 
   if (delivery.selectedDriverId) {
+    const cancelledCustomer = await getCustomerPublic(user.id);
     emitToUser(String(delivery.selectedDriverId), "delivery:cancelled", {
       deliveryId: String(delivery._id),
       status: delivery.status,
       cancelledBy: user.id,
+      customer: cancelledCustomer,
     });
   }
 
@@ -1164,7 +1229,7 @@ export const changeDeliveryInfoToDB = async (
   await DeliveryAcceptance.deleteMany({ deliveryId: delivery._id });
   await DeliveryOffer.deleteMany({ deliveryId: delivery._id });
 
-  emitDeliveryEvent(String(delivery._id), "delivery:changed", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:changed", {
     status: delivery.status,
     customerId: user.id,
   });
@@ -1180,9 +1245,11 @@ export const changeDeliveryInfoToDB = async (
     delivery.vehicleType,
   );
 
+  const updatedCustomer = await getCustomerPublic(String(delivery.customerId));
   emitToDrivers(newNearbyDriverIds, "driver:home:new-delivery", {
     deliveryId: String(delivery._id),
     customerId: String(delivery.customerId),
+    customer: updatedCustomer,
     vehicleType: delivery.vehicleType,
     pickup: delivery.pickup,
     dropoff: delivery.dropoff,
@@ -1535,7 +1602,7 @@ export const driverBidToDB = async (user: JwtPayload, payload: any) => {
     { upsert: true, new: true },
   );
 
-  emitDeliveryEvent(String(delivery._id), "delivery:bid-sent", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:bid-sent", {
     driverId: user.id,
     offerId: String(offer._id),
     offeredFare: offer.offeredFare,
@@ -1554,90 +1621,8 @@ export const driverBidToDB = async (user: JwtPayload, payload: any) => {
 
   return offer;
 };
-
-// export const customerSelectDriverToDB = async (
-//   user: JwtPayload,
-//   deliveryId: string,
-//   driverId: string,
-// ) => {
-//   if (user.role !== USER_ROLES.CUSTOMER) {
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Only customer");
-//   }
-
-//   const delivery = await Delivery.findById(deliveryId).select(
-//     "customerId status",
-//   );
-//   if (!delivery) throw new ApiError(StatusCodes.NOT_FOUND, "Delivery not found");
-//   if (delivery.customerId.toString() !== user.id) {
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Not yours");
-//   }
-//   if (delivery.status !== DELIVERY_STATUS.OPEN) {
-//     throw new ApiError(
-//       StatusCodes.BAD_REQUEST,
-//       "Delivery is not selectable now",
-//     );
-//   }
-
-//   const allInterestedDriverIds = await getInterestedDriverIds(deliveryId);
-
-//   const [accepted, offered] = await Promise.all([
-//     DeliveryAcceptance.findOne({
-//       deliveryId,
-//       driverId,
-//       status: ACCEPTANCE_STATUS.ACCEPTED,
-//     }).select("_id"),
-//     DeliveryOffer.findOne({
-//       deliveryId,
-//       driverId,
-//       status: OFFER_STATUS.PENDING,
-//     }).select("_id"),
-//   ]);
-
-//   if (!accepted && !offered) {
-//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver did not accept or bid");
-//   }
-
-//   const updated = await Delivery.findOneAndUpdate(
-//     { _id: deliveryId, customerId: user.id, status: DELIVERY_STATUS.OPEN },
-//     { $set: { selectedDriverId: driverId, status: DELIVERY_STATUS.ACCEPTED } },
-//     { new: true },
-//   );
-
-//   if (!updated) {
-//     throw new ApiError(StatusCodes.BAD_REQUEST, "Already selected / not open");
-//   }
-
-//   emitDeliveryEvent(String(updated._id), "delivery:driver-selected", {
-//     driverId,
-//     customerId: user.id,
-//     status: updated.status,
-//   });
-
-//   emitToUser(driverId, "delivery:driver-selected", {
-//     deliveryId: String(updated._id),
-//     driverId,
-//     customerId: user.id,
-//     status: updated.status,
-//   });
-
-//   const otherDriverIds = allInterestedDriverIds.filter((id) => id !== driverId);
-
-//   emitToDrivers(otherDriverIds, "driver:home:job-taken", {
-//     deliveryId: String(updated._id),
-//     selectedDriverId: driverId,
-//     status: updated.status,
-//   });
-
-//   await notifyUser(
-//     driverId,
-//     "You have been selected for a delivery.",
-//     String(updated._id),
-//     { customerId: user.id },
-//   );
-
-//   return updated;
-// };
-
+ 
+ 
 export const customerSelectDriverToDB = async (
   user: JwtPayload,
   deliveryId: string,
@@ -1739,7 +1724,7 @@ export const customerSelectDriverToDB = async (
       : Promise.resolve(null),
   ]);
 
-  emitDeliveryEvent(String(updated._id), "delivery:driver-selected", {
+  await emitDeliveryEvent(String(updated._id), "delivery:driver-selected", {
     driverId,
     customerId: user.id,
     status: updated.status,
@@ -1748,10 +1733,12 @@ export const customerSelectDriverToDB = async (
       : null,
   });
 
+  const selectedCustomer = await getCustomerPublic(user.id);
   emitToUser(driverId, "delivery:driver-selected", {
     deliveryId: String(updated._id),
     driverId,
     customerId: user.id,
+    customer: selectedCustomer,
     status: updated.status,
     acceptedOfferId: updated.acceptedOfferId
       ? String(updated.acceptedOfferId)
@@ -1832,7 +1819,7 @@ export const driverStartJourneyToDB = async (
   };
   await delivery.save();
 
-  emitDeliveryEvent(String(delivery._id), "delivery:journey-started", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:journey-started", {
     status: delivery.status,
     driverId: user.id,
   });
@@ -1875,7 +1862,7 @@ export const driverArrivedPickupToDB = async (
 
   await delivery.save();
 
-  emitDeliveryEvent(String(delivery._id), "delivery:arrived-pickup", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:arrived-pickup", {
     driverId: user.id,
     arrivedPickupAt: delivery.driverTimeline?.arrivedPickupAt ?? null,
   });
@@ -1918,7 +1905,7 @@ export const driverArrivedDropoffToDB = async (
 
   await delivery.save();
 
-  emitDeliveryEvent(String(delivery._id), "delivery:arrived-dropoff", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:arrived-dropoff", {
     driverId: user.id,
     arrivedDropoffAt: delivery.driverTimeline?.arrivedDropoffAt ?? null,
   });
@@ -1966,7 +1953,7 @@ export const driverMarkDeliveredToDB = async (
   };
   await delivery.save();
 
-  emitDeliveryEvent(String(delivery._id), "delivery:driver-delivered", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:driver-delivered", {
     status: delivery.status,
     driverId: user.id,
   });
@@ -2008,7 +1995,7 @@ export const customerConfirmDeliveredToDB = async (
   };
   await delivery.save();
 
-  emitDeliveryEvent(String(delivery._id), "delivery:confirmed", {
+  await emitDeliveryEvent(String(delivery._id), "delivery:confirmed", {
     status: delivery.status,
     customerId: user.id,
   });
@@ -2205,127 +2192,7 @@ export const getDriverMyDeliveriesToDB = async (
   return { meta, data };
 };
 
-
-
-// export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
-//   if (user.role !== USER_ROLES.DRIVER) {
-//     throw new ApiError(StatusCodes.FORBIDDEN, "Only driver");
-//   }
-
-//   const radiusKm = Number(query.radiusKm ?? 5);
-//   const limit = Number(query.limit ?? 20);
-
-//   const driver = await User.findById(user.id).lean();
-//   if (!driver?.driverStatus?.location?.coordinates) {
-//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver location not set");
-//   }
-
-//   const [lng, lat] = driver.driverStatus.location.coordinates;
-
-//   const vehicleType = driver?.driverRegistration?.vehicleInfo?.vehicleType;
-//   if (!vehicleType) {
-//     throw new ApiError(StatusCodes.BAD_REQUEST, "Driver vehicleType not set");
-//   }
-
-//   const usersCollection = User.collection.name; // ✅ real collection name
-
-//   const available = await Delivery.aggregate([
-//     {
-//       $geoNear: {
-//         near: { type: "Point", coordinates: [lng, lat] },
-//         distanceField: "distanceMeters",
-//         spherical: true,
-//         maxDistance: radiusKm * 1000,
-//         query: {
-//           status: DELIVERY_STATUS.OPEN,
-//           vehicleType,
-//         },
-//       },
-//     },
-//     { $sort: { createdAt: -1 } },
-//     { $limit: limit },
-
-//     // ✅ lookup customer
-//     {
-//       $lookup: {
-//         from: usersCollection,
-//         localField: "customerId",
-//         foreignField: "_id",
-//         as: "customer",
-//         pipeline: [
-//           {
-//             $project: {
-//               _id: 1,
-//               firstName: 1,
-//               lastName: 1,
-//               fullName: 1,
-//               // চাইলে image field যোগ করবেন (আপনার স্কিমা অনুযায়ী)
-//               // avatar: 1,
-//               // photoUrl: 1,
-//             },
-//           },
-//         ],
-//       },
-//     },
-//     { $unwind: { path: "$customer", preserveNullAndEmptyArrays: true } },
-
-//     // ✅ optional: UI-friendly name fallback
-//     {
-//       $addFields: {
-//         customerName: {
-//           $ifNull: [
-//             "$customer.fullName",
-//             {
-//               $trim: {
-//                 input: { $concat: ["$customer.firstName", " ", "$customer.lastName"] },
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     },
-
-//     // ✅ keep response small & controlled
-//     {
-//       $project: {
-//         customerId: 1,
-//         customer: 1,
-//         customerName: 1,
-//         selectedDriverId: 1,
-//         vehicleType: 1,
-//         pickup: 1,
-//         dropoff: 1,
-//         receiver: { name: 1, note: 1 },
-//         parcel: 1,
-//         pricing: 1,
-//         customerOfferFare: 1,
-//         status: 1,
-//         createdAt: 1,
-//         updatedAt: 1,
-//         distanceMeters: 1,
-//       },
-//     },
-//   ]);
-
-//   const activeStatuses = [
-//     DELIVERY_STATUS.ACCEPTED,
-//     DELIVERY_STATUS.PAYMENT_PENDING,
-//     DELIVERY_STATUS.PAID,
-//     DELIVERY_STATUS.IN_DELIVERY,
-//     DELIVERY_STATUS.DELIVERED_BY_DRIVER,
-//   ];
-
-//   const active = await Delivery.find({
-//     selectedDriverId: user.id,
-//     status: { $in: activeStatuses },
-//   })
-//     .sort({ createdAt: -1 })
-//     .limit(limit)
-//     .populate("customerId", "firstName lastName fullName") // ✅ schema অনুযায়ী
-//     .lean();
-
-//   return { available, active };
-// };
+ 
 
 export const getDriverHomeToDB = async (user: JwtPayload, query: any) => {
   if (user.role !== USER_ROLES.DRIVER) {
@@ -2576,11 +2443,13 @@ export const driverCancelDeliveryToDB = async (
     status: delivery.status,
   });
 
+  const cancelledDriver = await getDriverPublic(user.id);
   emitToUser(String(delivery.customerId), "delivery:driver-cancelled", {
     deliveryId: String(delivery._id),
     driverId: user.id,
     customerId: String(delivery.customerId),
     status: delivery.status,
+    driver: cancelledDriver,
   });
 
   await notifyUser(

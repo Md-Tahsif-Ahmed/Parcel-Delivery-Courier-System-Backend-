@@ -14,6 +14,10 @@ const requireAdminOrSuperAdmin = auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN);
 const requireSuperAdmin = auth(USER_ROLES.SUPER_ADMIN);
 const requireUser = auth(USER_ROLES.CUSTOMER);
 const requireDriver = auth(USER_ROLES.DRIVER);
+const requireDualUser = auth(
+  USER_ROLES.CUSTOMER,
+  USER_ROLES.DRIVER,
+);
 const requireAnyUser = auth(
   USER_ROLES.ADMIN,
   USER_ROLES.SUPER_ADMIN,
@@ -96,13 +100,13 @@ router
 /* ---------------------------- DRIVER REGISTRATION ----------------------- */
 router.get(
   "/driver/registration/me",
-  requireDriver,
+  requireDualUser,
   UserController.getMyDriverRegistration,
 );
 
 router.patch(
   "/driver/registration/basic-info",
-  requireDriver,
+  requireDualUser,
   fileUploadHandler(),
   parseAllFilesData({ fieldName: FOLDER_NAMES.PROFILE_IMAGE, forceSingle: true }),
   validateRequest(UserValidation.driverBasicInfoZodSchema),
@@ -111,7 +115,7 @@ router.patch(
 
 router.patch(
   "/driver/registration/vehicle-info",
-  requireDriver,
+  requireDualUser,
   fileUploadHandler(),
   parseAllFilesData({ fieldName: FOLDER_NAMES.VEHICLE_IMAGE, forceSingle: true }),
   validateRequest(UserValidation.driverVehicleInfoZodSchema),
@@ -120,7 +124,7 @@ router.patch(
 
 router.patch(
   "/driver/registration/required-docs",
-  requireDriver,
+  requireDualUser,
   fileUploadHandler(),
   parseAllFilesData(
     { fieldName: FOLDER_NAMES.VEHICLE_REGISTRATION_DOC, forceSingle: true },
@@ -135,14 +139,14 @@ router.patch(
 
 router.patch(
   "/driver/registration/referral",
-  requireDriver,
+  requireDualUser,
   validateRequest(UserValidation.driverReferralZodSchema),
   UserController.updateDriverReferral,
 );
 
 router.post(
   "/driver/registration/submit",
-  requireDriver,
+  requireDualUser,
   UserController.submitDriverApplication,
 );
 
