@@ -849,13 +849,27 @@ const notifyUser = async (
   });
 };
 
+const MILES_TO_METERS = 1609.34;
+
 const getEligibleNearbyDrivers = async (
   pickupPoint: { coordinates: [number, number] },
   vehicleType: string,
-  radiusKm = 8,
+  radiusMiles?: number,
   limit = 100,
 ) => {
   const [lng, lat] = pickupPoint.coordinates;
+
+  const lightVehicles = [
+    "BICYCLE",
+    "E_BIKE",
+    "E_SCOOTER",
+  ];
+
+  const defaultMiles = lightVehicles.includes(vehicleType) ? 3 : 4;
+  const effectiveRadiusMiles =
+    typeof radiusMiles === "number" && radiusMiles > 0
+      ? radiusMiles
+      : defaultMiles;
 
   const drivers = await User.aggregate([
     {
@@ -863,7 +877,7 @@ const getEligibleNearbyDrivers = async (
         near: { type: "Point", coordinates: [lng, lat] },
         distanceField: "distanceMeters",
         spherical: true,
-        maxDistance: radiusKm * 1000,
+        maxDistance: effectiveRadiusMiles * MILES_TO_METERS,
         query: {
           role: USER_ROLES.DRIVER,
           "driverStatus.isOnline": true,
