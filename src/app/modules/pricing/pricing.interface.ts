@@ -2,25 +2,25 @@ export type IVehiclePricing = {
   vehicleType: string;
 
   baseFee: number;
-  perKmRate: number;
+  perMileRate: number;
 
   minFare: number;
   maxFare?: number | null;
 
   weight: {
-    includedKg: number;
-    perExtraKgRate: number;
-    maxWeightKg?: number | null;
+    includedLbs: number;
+    perExtraLbsRate: number;
+    maxWeightLbs?: number | null;
   };
 
   rounding: {
     mode: "NEAREST" | "UP" | "DOWN";
-    step: number; // 1, 0.5, 5
+    step: number;
   };
 
   range: {
-    lowMultiplier: number;  // e.g. 0.85
-    highMultiplier: number; // e.g. 1.2
+    lowMultiplier: number;
+    highMultiplier: number;
   };
 
   isActive: boolean;
@@ -39,13 +39,13 @@ export type IEstimateInput = {
   vehicleType: string;
   pickup: { lat: number; lng: number };
   dropoff: { lat: number; lng: number };
-  weightKg: number;
+  weightLbs: number;
 };
 
 export type IEstimateResult = {
   currency: string;
   version: number;
-  distanceKm: number;
+  distanceMiles: number;
   breakdown: {
     baseFee: number;
     distanceFare: number;

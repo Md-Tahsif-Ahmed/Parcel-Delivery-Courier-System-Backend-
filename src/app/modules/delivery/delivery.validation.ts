@@ -1,78 +1,3 @@
-// import { z } from "zod";
-
-// const pointSchema = z.object({
-//   lat: z.number(),
-//   lng: z.number(),
-//   address: z.string().optional(),
-// });
-
-// export const DeliveryValidation = {
-//   createDelivery: z.object({
-//     body: z.object({
-//       vehicleType: z.string(),
-//       pickup: pointSchema,
-//       dropoff: pointSchema,
-//       receiver: z.object({
-//         name: z.string(),
-//         phone: z.string(),
-//         note: z.string().optional(),
-//       }),
-//       parcel: z
-//         .object({
-//           type: z.string().optional(),
-//           size: z.string().optional(),
-//           weightKg: z.number().optional(),
-//           description: z.string().optional(),
-//           isFragile: z.boolean().optional(),
-//           isLiquid: z.boolean().optional(),
-//           isValuable: z.boolean().optional(),
-//           photos: z.array(z.string()).optional(),
-//         })
-//         .optional(),
-//       customerOfferFare: z.number().min(1),
-//     }),
-//   }),
-
-//   matches: z.object({
-//     query: z.object({
-//       radiusKm: z.string().optional(), // default 5
-//       limit: z.string().optional(), // default 20
-//     }),
-//   }),
-
-//   requestDriver: z.object({
-//     body: z.object({
-//       driverId: z.string(),
-//     }),
-//   }),
-
-//   driverAccept: z.object({
-//     body: z.object({
-//       deliveryId: z.string(),
-//     }),
-//   }),
-
-//   driverBid: z.object({
-//     body: z.object({
-//       deliveryId: z.string(),
-//       offeredFare: z.number().min(1),
-//       note: z.string().optional(),
-//     }),
-//   }),
-
-//   customerAcceptOffer: z.object({
-//     body: z.object({
-//       offerId: z.string(),
-//     }),
-//   }),
-
-//   bookNow: z.object({
-//     body: z.object({
-//       deliveryId: z.string(),
-//     }),
-//   }),
-// };
-
 import { z } from "zod";
 
 const pointSchema = z.object({
@@ -96,13 +21,12 @@ export const DeliveryValidation = {
         .object({
           type: z.string().optional(),
           size: z.string().optional(),
-          weightKg: z.number().optional(),
+          weightLbs: z.number().optional(), // ✅ changed
           description: z.string().optional(),
           isFragile: z.boolean().optional(),
           isLiquid: z.boolean().optional(),
           isValuable: z.boolean().optional(),
           parcelPhotos: z.array(z.string()).optional(),
-
         })
         .optional(),
       customerOfferFare: z.number().min(1),
@@ -118,14 +42,14 @@ export const DeliveryValidation = {
 
   // cencel + update
 
-     changeOffer: z.object({
-      params: z.object({
-        id: z.string(),
-      }),
-      body: z.object({
-        customerOfferFare: z.number().min(1),
-      }),
+  changeOffer: z.object({
+    params: z.object({
+      id: z.string(),
     }),
+    body: z.object({
+      customerOfferFare: z.number().min(1),
+    }),
+  }),
 
   cancelDelivery: z.object({
     params: z.object({
@@ -174,7 +98,6 @@ export const DeliveryValidation = {
           isLiquid: z.boolean().optional(),
           isValuable: z.boolean().optional(),
           parcelPhotos: z.array(z.string()).optional(),
-
         })
         .optional(),
 
@@ -206,8 +129,6 @@ export const DeliveryValidation = {
     }),
   }),
 
- 
-
   driverBid: z.object({
     body: z.object({
       deliveryId: z.string(),
@@ -230,7 +151,5 @@ export const DeliveryValidation = {
       stars: z.number().min(1).max(5),
       note: z.string().max(500).optional(),
     }),
-
- 
   }),
 };

@@ -42,7 +42,7 @@ export type IReceiver = {
 export type IParcel = {
   type?: string;
   size?: string;
-  weightKg?: number;
+  weightLbs?: number; // ✅ changed
   description?: string;
   isFragile?: boolean;
   isLiquid?: boolean;
@@ -54,7 +54,7 @@ export type IPricingSnapshot = {
   currency: string;
   version: number;
 
-  distanceKm: number;
+  distanceMiles: number; // ✅ changed
 
   breakdown: {
     baseFee: number;

@@ -40,7 +40,7 @@ const deliverySchema = new Schema<IDelivery>(
     parcel: {
       type: { type: String, default: null },
       size: { type: String, default: null },
-      weightKg: { type: Number, default: null },
+      weightLbs: { type: Number, default: null }, // ✅ changed
       description: { type: String, default: null },
       isFragile: { type: Boolean, default: false },
       isLiquid: { type: Boolean, default: false },
@@ -50,18 +50,22 @@ const deliverySchema = new Schema<IDelivery>(
     pricing: {
       currency: { type: String, default: "usd" },
       version: { type: Number, default: 1 },
+
       estimatedFare: { type: Number, default: 0 },
+
       suggestedRange: {
         low: { type: Number, default: 0 },
         high: { type: Number, default: 0 },
       },
+
       breakdown: {
         baseFee: { type: Number, default: 0 },
         distanceFare: { type: Number, default: 0 },
         weightFare: { type: Number, default: 0 },
         raw: { type: Number, default: 0 },
       },
-      distanceKm: { type: Number, default: 0 },
+
+      distanceMiles: { type: Number, default: 0 }, // ✅ changed
     },
 
     customerOfferFare: { type: Number, required: true },

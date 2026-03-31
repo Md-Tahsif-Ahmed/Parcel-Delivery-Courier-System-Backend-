@@ -6,7 +6,7 @@ export const PricingValidation = {
       vehicleType: z.string().min(1),
       pickup: z.object({ lat: z.number(), lng: z.number() }),
       dropoff: z.object({ lat: z.number(), lng: z.number() }),
-      weightKg: z.number().min(0),
+      weightLbs: z.number().min(0),
     }),
   }),
 
@@ -17,14 +17,15 @@ export const PricingValidation = {
         z.object({
           vehicleType: z.string().min(1),
           baseFee: z.number().min(0),
-          perKmRate: z.number().min(0),
+          perMileRate: z.number().min(0),
+
           minFare: z.number().min(0),
           maxFare: z.number().min(0).nullable().optional(),
 
           weight: z.object({
-            includedKg: z.number().min(0),
-            perExtraKgRate: z.number().min(0),
-            maxWeightKg: z.number().min(0).nullable().optional(),
+            includedLbs: z.number().min(0),
+            perExtraLbsRate: z.number().min(0),
+            maxWeightLbs: z.number().min(0).nullable().optional(),
           }),
 
           rounding: z.object({

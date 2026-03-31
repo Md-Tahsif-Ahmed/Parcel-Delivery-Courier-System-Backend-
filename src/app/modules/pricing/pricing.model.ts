@@ -6,15 +6,15 @@ const VehiclePricingSchema = new Schema(
     vehicleType: { type: String, required: true, unique: true },
 
     baseFee: { type: Number, required: true, default: 0 },
-    perKmRate: { type: Number, required: true, default: 0 },
+    perMileRate: { type: Number, required: true, default: 0 },
 
     minFare: { type: Number, required: true, default: 0 },
     maxFare: { type: Number, default: null },
 
     weight: {
-      includedKg: { type: Number, default: 0 },
-      perExtraKgRate: { type: Number, default: 0 },
-      maxWeightKg: { type: Number, default: null },
+      includedLbs: { type: Number, default: 0 },
+      perExtraLbsRate: { type: Number, default: 0 },
+      maxWeightLbs: { type: Number, default: null },
     },
 
     rounding: {
